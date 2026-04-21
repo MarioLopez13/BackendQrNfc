@@ -1,0 +1,10 @@
+# Imagen simple que copia el JAR pre-compilado
+FROM gcr.io/distroless/java21-debian12
+# Configura la zona horaria
+ENV TZ="America/Guayaquil"
+# Copia el archivo JAR generado localmente
+COPY target/identity-1.0.0.jar /app/identity-1.0.0.jar
+# Expone el puerto utilizado por la aplicación
+EXPOSE 9909
+# Comando de inicio para ejecutar la aplicación
+ENTRYPOINT ["java", "-Xms256m", "-Xmx512m", "-XX:MaxMetaspaceSize=192m", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-XX:+UseStringDeduplication", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/identity-1.0.0.jar"]

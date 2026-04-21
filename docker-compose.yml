@@ -1,0 +1,103 @@
+services:
+
+  # ============================================
+  # PostgreSQL - Base de datos principal
+  # ============================================
+  db:
+    container_name: smartpayut-db
+    image: postgres:15.2
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: toor
+      POSTGRES_DB: smartpayut
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5431:5432"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Redis - Cache y sesiones
+  # ============================================
+  redis:
+    container_name: smartpayut-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass 12345
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "12345", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # RabbitMQ - Mensajería
+  # ============================================
+  rabbitmq:
+    container_name: smartpayut-rabbitmq
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Keycloak - Identity Provider
+  # ============================================
+  keycloak:
+    container_name: smartpayut-keycloak
+    image: quay.io/keycloak/keycloak:24.0.1
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/smartpayut
+      KC_DB_SCHEMA: keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: toor
+    volumes:
+      - ./keycloak/smartpayut-realm.json:/opt/keycloak/data/import/smartpayut-realm.json:ro
+    ports:
+      - "8180:8080"
+    networks:
+      - microservices-net
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  microservices-net:
+    driver: bridge

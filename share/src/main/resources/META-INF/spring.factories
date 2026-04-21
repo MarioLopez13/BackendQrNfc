@@ -1,0 +1,4 @@
+# Auto Configuration
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.kynsof.share.config.ShareAutoConfiguration,\
+com.kynsof.share.core.infrastructure.config.MediatorCacheAutoConfiguration

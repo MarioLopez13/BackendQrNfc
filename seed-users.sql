@@ -1,0 +1,45 @@
+INSERT INTO identity.user_system (
+    id,
+    email,
+    name,
+    lastname,
+    username,
+    usertype,
+    status,
+    createdat,
+    updatedat
+) VALUES
+(
+    gen_random_uuid(),
+    'admin@kynsoft.com',
+    'Admin',
+    'Kynsoft',
+    'admin@kynsoft.com',
+    'SYSTEM',
+    'ACTIVE',
+    NOW(),
+    NOW()
+),
+(
+    gen_random_uuid(),
+    'operator@kynsoft.com',
+    'Operator',
+    'Kynsoft',
+    'operator@kynsoft.com',
+    'SYSTEM',
+    'ACTIVE',
+    NOW(),
+    NOW()
+),
+(
+    gen_random_uuid(),
+    'user@kynsoft.com',
+    'User',
+    'Kynsoft',
+    'user@kynsoft.com',
+    'SYSTEM',
+    'ACTIVE',
+    NOW(),
+    NOW()
+)
+ON CONFLICT (email) DO NOTHING;

@@ -1,10 +1,34 @@
-# Imagen simple que copia el JAR pre-compilado
-FROM gcr.io/distroless/java21-debian12
-# Configura la zona horaria
+# ============================================
+# Dockerfile.local — Identity (JAR pre-compilado)
+# ============================================
+# Uso: compilar localmente con ./mvnw -pl identity package -DskipTests
+#      y luego: docker build -f identity/Dockerfile.local -t identity .
+# ============================================
+FROM gcr.io/distroless/java21-debian12:nonroot
+
+LABEL maintainer="smartpayut"
+LABEL service="identity"
+LABEL version="1.0.0"
+
 ENV TZ="America/Guayaquil"
-# Copia el archivo JAR generado localmente
-COPY target/identity-1.0.0.jar /app/identity-1.0.0.jar
-# Expone el puerto utilizado por la aplicación
+
+WORKDIR /app
+
+COPY --chown=nonroot:nonroot identity/target/identity-*.jar app.jar
+
 EXPOSE 9909
-# Comando de inicio para ejecutar la aplicación
-ENTRYPOINT ["java", "-Xms256m", "-Xmx512m", "-XX:MaxMetaspaceSize=192m", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-XX:+UseStringDeduplication", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/identity-1.0.0.jar"]
+
+USER nonroot
+
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:InitialRAMPercentage=50.0", \
+    "-XX:+UseZGC", \
+    "-XX:+ZGenerational", \
+    "-XX:+TieredCompilation", \
+    "-XX:TieredStopAtLevel=1", \
+    "-XX:+UseStringDeduplication", \
+    "-XX:+ExitOnOutOfMemoryError", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", "app.jar"]

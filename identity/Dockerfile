@@ -1,27 +1,124 @@
-# Etapa de construcción: usa Maven con OpenJDK 21 para compilar la aplicación
-FROM maven:3.9.9-eclipse-temurin-21-alpine AS builder
+# ============================================
+# Dockerfile Optimizado para Identity Service
+# ============================================
+# Optimizaciones implementadas:
+# - Multi-stage build con caché de dependencias
+# - Spring Boot Layered JARs para mejor cacheo
+# - JVM optimizado para contenedores
+# - Imagen distroless para seguridad y tamaño reducido
+# ============================================
 
-# Establece el directorio de trabajo
+# Global build arguments for cross-platform support
+ARG BUILDPLATFORM=linux/amd64
+ARG TARGETPLATFORM=linux/amd64
+
+# ============================================
+# Etapa 1: Descarga de dependencias (cacheada)
+# ============================================
+# Spring Boot: 3.3.13 | Spring Cloud: 2023.0.6 | Java: 21
+FROM --platform=$BUILDPLATFORM maven:3.9.9-eclipse-temurin-21-alpine AS dependencies
+
 WORKDIR /build
 
-# Copia los archivos del proyecto, incluyendo el pom.xml
-COPY . .
+# Copiar el pom.xml padre (si existe)
+COPY pom.xml* .
 
-# Compila las dependencias y construye el paquete sin ejecutar pruebas
-RUN mvn dependency:go-offline && \
-    mvn clean package -DskipTests
+# Copiar el módulo share completo (identity depende de share)
+COPY share ./share
 
-# Etapa final: usa Distroless para una imagen ligera y segura en producción
-FROM gcr.io/distroless/java21-debian12
+# Copiar solo pom.xml del identity primero para aprovechar cache de Docker
+COPY identity/pom.xml ./identity/
 
-# Configura la zona horaria
+# Primero instalar share en el repo local de Maven
+RUN if [ -d share ]; then \
+    cd share && mvn clean install -DskipTests -B; \
+    fi
+
+# Descargar dependencias del identity (esta capa se cachea si pom.xml no cambia)
+RUN cd identity && mvn dependency:go-offline -B || mvn dependency:resolve -B
+
+# ============================================
+# Etapa 2: Construcción de la aplicación
+# ============================================
+FROM --platform=$BUILDPLATFORM maven:3.9.9-eclipse-temurin-21-alpine AS builder
+
+WORKDIR /build
+
+# Copiar dependencias ya resueltas desde stage anterior (incluye share instalado)
+COPY --from=dependencies /root/.m2 /root/.m2
+COPY --from=dependencies /build/pom.xml* .
+COPY --from=dependencies /build/share ./share
+COPY --from=dependencies /build/identity/pom.xml ./identity/
+
+# Copiar código fuente del identity
+COPY identity/src ./identity/src
+
+# Build de la aplicación (rápido porque dependencias ya están cacheadas)
+RUN cd identity && mvn clean package -DskipTests -B
+
+# Verificar que el JAR fue creado
+RUN ls -lh identity/target/identity-*.jar
+
+# ============================================
+# Etapa 3: Extraer capas del JAR
+# ============================================
+FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jre-alpine AS extractor
+
+WORKDIR /extract
+
+# Copiar JAR desde build stage
+COPY --from=builder /build/identity/target/identity-*.jar app.jar
+
+# Extraer layers del Spring Boot JAR
+RUN java -Djarmode=layertools -jar app.jar extract
+
+# ============================================
+# Etapa 4: Imagen final optimizada
+# ============================================
+FROM gcr.io/distroless/java21-debian12:nonroot
+
+# Metadata de la imagen
+LABEL maintainer="smartpayut"
+LABEL service="identity"
+LABEL version="1.0.0"
+
+# Configura zona horaria
 ENV TZ="America/Guayaquil"
 
-# Copia el archivo JAR generado en la etapa de construcción
-COPY --from=builder /build/target/identity-1.0.0.jar /app/identity-1.0.0.jar
+# Configura el directorio de trabajo
+WORKDIR /app
 
-# Expone el puerto utilizado por la aplicación
+# Copia las capas extraídas del JAR en orden de cambio (menos frecuente -> más frecuente)
+# Esto optimiza el cacheo de Docker, ya que las dependencias cambian menos que el código
+COPY --from=extractor --chown=nonroot:nonroot /extract/dependencies/ ./
+COPY --from=extractor --chown=nonroot:nonroot /extract/spring-boot-loader/ ./
+COPY --from=extractor --chown=nonroot:nonroot /extract/snapshot-dependencies/ ./
+COPY --from=extractor --chown=nonroot:nonroot /extract/application/ ./
+
+# Expone el puerto del identity
 EXPOSE 9909
 
-# Comando de inicio para ejecutar la aplicación
-ENTRYPOINT ["java", "-Xms256m", "-Xmx512m", "-XX:MaxMetaspaceSize=192m", "-XX:+UseG1GC", "-XX:MaxGCPauseMillis=200", "-XX:+UseStringDeduplication", "-XX:+ExitOnOutOfMemoryError", "-jar", "/app/identity-1.0.0.jar"]
+# Usuario non-root (ya configurado en distroless:nonroot)
+USER nonroot
+
+# Comando de inicio con JVM optimizado para Java 21 y contenedores
+# Optimizaciones de JVM:
+# - UseContainerSupport: Detecta límites de memoria del contenedor
+# - MaxRAMPercentage: Usa hasta 75% de la RAM disponible
+# - UseZGC + ZGenerational: Garbage collector de baja latencia (nuevo en Java 21)
+# - TieredStopAtLevel: Optimiza tiempo de startup
+# - UseStringDeduplication: Reduce uso de memoria para strings
+# - ExitOnOutOfMemoryError: Mata el proceso si hay OOM (Kubernetes reiniciará)
+ENTRYPOINT ["java", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:InitialRAMPercentage=50.0", \
+    "-XX:+UseZGC", \
+    "-XX:+ZGenerational", \
+    "-XX:+TieredCompilation", \
+    "-XX:TieredStopAtLevel=1", \
+    "-XX:+UseStringDeduplication", \
+    "-XX:+ExitOnOutOfMemoryError", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-Dspring.backgroundpreinitializer.ignore=true", \
+    "org.springframework.boot.loader.launch.JarLauncher"]

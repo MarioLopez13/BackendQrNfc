@@ -1,0 +1,64 @@
+# ============================================
+# .dockerignore para Identity Service
+# ============================================
+# Excluye archivos innecesarios del build context
+# para acelerar el build y reducir tamaño
+
+# Directorios de build
+target/
+build/
+out/
+bin/
+
+# Archivos de IDE
+.idea/
+.vscode/
+.eclipse/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+
+# Archivos de Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# Logs
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentación
+README.md
+*.md
+docs/
+
+# Tests
+src/test/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile

@@ -1,14 +1,12 @@
 # ============================================
-# CI/CD — Build, Push & Deploy (GitOps)
+# CI — Build & Push to GHCR
 # ============================================
-# On push to main:
+# On push to main/dev:
 #   1. Detects which service changed (gateway/identity)
 #   2. Builds & pushes Docker image to GHCR
-#   3. Updates image tag in kynsoft-gitops
-#   4. ArgoCD syncs the cluster automatically
 # ============================================
 
-name: Build & Deploy
+name: Build & Push
 
 on:
   workflow_dispatch:
@@ -45,15 +43,13 @@ jobs:
               - 'gateway/**'
               - 'share/**'
               - 'pom.xml'
-              - '.github/workflows/docker-build.yml'
             identity:
               - 'identity/**'
               - 'share/**'
               - 'pom.xml'
-              - '.github/workflows/docker-build.yml'
 
   # ============================================
-  # Gateway: Build → Push → Deploy
+  # Gateway: Build & Push
   # ============================================
   gateway-build:
     name: Gateway - Build & Push
@@ -91,53 +87,8 @@ jobs:
           cache-from: type=gha,scope=gateway
           cache-to: type=gha,mode=max,scope=gateway
 
-  gateway-deploy:
-    name: Gateway - Deploy
-    needs: gateway-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Lowercase owner
-        run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-
-      - name: Checkout GitOps repo
-        uses: actions/checkout@v4
-        with:
-          repository: kmontes198910/kynsoft-gitops
-          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
-          ref: main
-
-      - name: Update image tag in manifest
-        run: |
-          sed -i "s|image: ghcr.io/${{ env.OWNER }}/smartpayut-gateway-dev:.*|image: ghcr.io/${{ env.OWNER }}/smartpayut-gateway-dev:${{ github.sha }}|" \
-            environments/dev/smartpayut-dev/deployments/smartpayut-gateway.yaml
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add environments/dev/smartpayut-dev/deployments/smartpayut-gateway.yaml
-          git diff --cached --quiet || git commit -m "deploy(smartpayut-gateway): update image to ${{ github.sha }}"
-          git pull --rebase
-          git push
-
-  gateway-cleanup:
-    name: Gateway - Cleanup Images
-    needs: gateway-deploy
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      packages: write
-    steps:
-      - name: Delete old image versions (keep last 3)
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: smartpayut-gateway-dev
-          package-type: container
-          min-versions-to-keep: 3
-          delete-only-untagged-versions: false
-
   # ============================================
-  # Identity: Build → Push → Deploy
+  # Identity: Build & Push
   # ============================================
   identity-build:
     name: Identity - Build & Push
@@ -174,48 +125,3 @@ jobs:
             ghcr.io/${{ env.OWNER }}/smartpayut-identity-dev:${{ github.sha }}
           cache-from: type=gha,scope=identity
           cache-to: type=gha,mode=max,scope=identity
-
-  identity-deploy:
-    name: Identity - Deploy
-    needs: identity-build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Lowercase owner
-        run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-
-      - name: Checkout GitOps repo
-        uses: actions/checkout@v4
-        with:
-          repository: kmontes198910/kynsoft-gitops
-          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
-          ref: main
-
-      - name: Update image tag in manifest
-        run: |
-          sed -i "s|image: ghcr.io/${{ env.OWNER }}/smartpayut-identity-dev:.*|image: ghcr.io/${{ env.OWNER }}/smartpayut-identity-dev:${{ github.sha }}|" \
-            environments/dev/smartpayut-dev/deployments/smartpayut-identity.yaml
-
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add environments/dev/smartpayut-dev/deployments/smartpayut-identity.yaml
-          git diff --cached --quiet || git commit -m "deploy(smartpayut-identity): update image to ${{ github.sha }}"
-          git pull --rebase
-          git push
-
-  identity-cleanup:
-    name: Identity - Cleanup Images
-    needs: identity-deploy
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    permissions:
-      packages: write
-    steps:
-      - name: Delete old image versions (keep last 3)
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: smartpayut-identity-dev
-          package-type: container
-          min-versions-to-keep: 3
-          delete-only-untagged-versions: false

@@ -59,6 +59,7 @@ public class SecurityConfig {
                 "/api/advertisement-image/search",
                 "/api/2fa/verify-login",
                 "/api/2fa/check/**",
+                "/api/mobile-payments/**",
         };
 
         http

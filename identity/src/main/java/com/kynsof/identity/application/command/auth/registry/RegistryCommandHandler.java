@@ -9,7 +9,6 @@ import com.kynsof.share.core.domain.EUserType;
 import com.kynsof.share.core.domain.bus.command.ICommandHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
 import java.util.UUID;
 
 @Component
@@ -41,8 +40,7 @@ public class RegistryCommandHandler implements ICommandHandler<RegistryCommand> 
                 ""
         );
         userDto.setKeyCloakId(UUID.fromString(registerUser));
-        userDto.setUserType(EUserType.PATIENTS);
-
+        userDto.setUserType(EUserType.UNDEFINED);
         UUID id = userSystemService.create(userDto);
     }
 

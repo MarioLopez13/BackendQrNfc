@@ -83,12 +83,26 @@ public class UserSystem implements Serializable {
     }
 
     public UserSystemDto toAggregate() {
-        UserSystemDto dto = new UserSystemDto(this.id, this.userName, this.email, this.name, this.lastName, this.status, this.image);
-        dto.setUserType(userType);
-        dto.setImage(image);
-        dto.setSelectedBusiness(selectedBusiness);
+    UserSystemDto dto = new UserSystemDto(
+            this.id,
+            this.userName,
+            this.email,
+            this.name,
+            this.lastName,
+            this.status,
+            this.image
+    );
+
+    dto.setUserType(userType);
+    dto.setImage(image);
+    dto.setSelectedBusiness(selectedBusiness);
+
+    if (createdAt != null) {
         dto.setCreatedAt(createdAt.toLocalDate());
-        dto.setKeyCloakId(keyCloakId);
-        return dto;
+    }
+
+    dto.setKeyCloakId(keyCloakId);
+
+    return dto;
     }
 }

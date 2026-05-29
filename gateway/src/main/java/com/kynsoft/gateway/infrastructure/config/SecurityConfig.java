@@ -45,19 +45,38 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .authorizeExchange(exchanges -> exchanges
-                        .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .pathMatchers("/actuator/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/identity/api/auth/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/identity/api/auth/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/identity/api/business-balance/discount/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/identity/api/advertisement-image/search").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/identity/api/business/*/with-images").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/identity/api/leads/capture").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/identity/api/2fa/verify-login").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/identity/api/2fa/check/**").permitAll()
-                        .pathMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**", "/v2/api-docs.yaml", "/v3/api-docs.yaml", "/v2/api-docs/**", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
-                        .anyExchange().authenticated()
-                )
+                .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .pathMatchers("/actuator/**").permitAll()
+
+                // AUTH PUBLICA POR GATEWAY
+                .pathMatchers(HttpMethod.POST, "/api/auth/**").permitAll()
+                .pathMatchers(HttpMethod.GET, "/api/auth/**").permitAll()
+
+                // AUTH DIRECTA A IDENTITY
+                .pathMatchers(HttpMethod.POST, "/identity/api/auth/**").permitAll()
+                .pathMatchers(HttpMethod.GET, "/identity/api/auth/**").permitAll()
+
+                .pathMatchers(HttpMethod.POST, "/identity/api/business-balance/discount/**").permitAll()
+                .pathMatchers(HttpMethod.POST, "/identity/api/advertisement-image/search").permitAll()
+                .pathMatchers(HttpMethod.GET, "/identity/api/business/*/with-images").permitAll()
+                .pathMatchers(HttpMethod.POST, "/identity/api/leads/capture").permitAll()
+                .pathMatchers(HttpMethod.POST, "/identity/api/2fa/verify-login").permitAll()
+                .pathMatchers(HttpMethod.GET, "/identity/api/2fa/check/**").permitAll()
+
+                .pathMatchers(
+                        HttpMethod.GET,
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/v2/api-docs.yaml",
+                        "/v3/api-docs.yaml",
+                        "/v2/api-docs/**",
+                        "/v3/api-docs/**",
+                        "/swagger-resources/**",
+                        "/webjars/**"
+                ).permitAll()
+
+                .anyExchange().authenticated()
+        )    
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtDecoder(jwtDecoder()))
                 )
@@ -88,18 +107,19 @@ public class SecurityConfig {
     }
 
     private boolean isPublicPath(String path) {
-        return path.startsWith("/actuator/") ||
-               path.startsWith("/identity/api/auth/") ||
-               path.startsWith("/identity/api/business-balance/discount/") ||
-               path.equals("/identity/api/advertisement-image/search") ||
-               path.startsWith("/identity/api/business/") && path.endsWith("/with-images") ||
-               path.equals("/identity/api/leads/capture") ||
-               path.equals("/identity/api/2fa/verify-login") ||
-               path.startsWith("/identity/api/2fa/check/") ||
-               path.contains("/swagger-ui") ||
-               path.contains("/api-docs") ||
-               path.contains("/swagger-resources") ||
-               path.contains("/webjars/");
+    return path.startsWith("/actuator/") ||
+           path.startsWith("/api/auth/") ||
+           path.startsWith("/identity/api/auth/") ||
+           path.startsWith("/identity/api/business-balance/discount/") ||
+           path.equals("/identity/api/advertisement-image/search") ||
+           path.startsWith("/identity/api/business/") && path.endsWith("/with-images") ||
+           path.equals("/identity/api/leads/capture") ||
+           path.equals("/identity/api/2fa/verify-login") ||
+           path.startsWith("/identity/api/2fa/check/") ||
+           path.contains("/swagger-ui") ||
+           path.contains("/api-docs") ||
+           path.contains("/swagger-resources") ||
+           path.contains("/webjars/");
     }
 
     @Bean
@@ -109,7 +129,7 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization", "Content-Type"));
-        config.setAllowCredentials(true);
+        config.setAllowCredentials(false);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

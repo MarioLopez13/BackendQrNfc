@@ -47,7 +47,7 @@ public interface GeographicLocationReadDataJPARepository extends JpaRepository<G
            ON pa.fk_pk_geographic_location = c.id
             WHERE p.type = 'PROVINCE'
   AND (
-      COALESCE(:text, '') = ''\s
+      COALESCE(:text, '') = ''
       OR p.name ILIKE '%' || :text || '%'
       OR c.name ILIKE '%' || :text || '%'
       OR pa.name ILIKE '%' || :text || '%'

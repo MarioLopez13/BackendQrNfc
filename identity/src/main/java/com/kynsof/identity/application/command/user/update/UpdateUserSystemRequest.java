@@ -1,5 +1,6 @@
 package com.kynsof.identity.application.command.user.update;
 
+import com.kynsof.identity.domain.dto.UserStatus;
 import com.kynsof.share.core.domain.EUserType;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,4 +14,5 @@ public class UpdateUserSystemRequest {
     private String lastName;
     private EUserType userType;
     private String image;
+    private UserStatus status;
 }

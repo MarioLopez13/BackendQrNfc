@@ -11,16 +11,21 @@ import com.kynsof.share.core.domain.rules.ValidateObjectNotNullRule;
 import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+import java.util.UUID;
 @Component
-public class UpdateUserSystemCommandHandler implements ICommandHandler<UpdateUserSystemCommand> {
+public class UpdateUserSystemCommandHandler
+        implements ICommandHandler<UpdateUserSystemCommand> {
 
     private final IUserSystemService systemService;
     private final IAuthService keycloakProvider;
     private final CacheManager cacheManager;
 
-    public UpdateUserSystemCommandHandler(IUserSystemService systemService,
-                                          IAuthService keycloakProvider,
-                                          CacheManager cacheManager) {
+    public UpdateUserSystemCommandHandler(
+            IUserSystemService systemService,
+            IAuthService keycloakProvider,
+            CacheManager cacheManager
+    ) {
         this.systemService = systemService;
         this.keycloakProvider = keycloakProvider;
         this.cacheManager = cacheManager;
@@ -28,60 +33,126 @@ public class UpdateUserSystemCommandHandler implements ICommandHandler<UpdateUse
 
     @Override
     public void handle(UpdateUserSystemCommand command) {
-        // Validación inicial
-        RulesChecker.checkRule(new ValidateObjectNotNullRule<>(command.getId(), "id", "UserSystem ID cannot be null."));
 
-        // Recuperación del usuario a actualizar
-        UserSystemDto objectToUpdate = this.systemService.findById(command.getId());
+        RulesChecker.checkRule(
+                new ValidateObjectNotNullRule<>(
+                        command.getId(),
+                        "id",
+                        "UserSystem ID cannot be null."
+                )
+        );
 
-        changeValueKeycloack(command, objectToUpdate);
+        UserSystemDto objectToUpdate =
+                systemService.findById(command.getId());
 
-        updateUserSystems(command, objectToUpdate);
+        updateKeycloakIfRequired(command, objectToUpdate);
+        updateUserSystem(command, objectToUpdate);
     }
 
-    private void updateUserSystems(UpdateUserSystemCommand command, UserSystemDto objectToUpdate) {
+    private void updateUserSystem(
+            UpdateUserSystemCommand command,
+            UserSystemDto objectToUpdate
+    ) {
         if (command.getEmail() != null) {
             objectToUpdate.setEmail(command.getEmail());
         }
+
         if (command.getName() != null) {
             objectToUpdate.setName(command.getName());
         }
+
         if (command.getLastName() != null) {
             objectToUpdate.setLastName(command.getLastName());
         }
+
         if (command.getImage() != null) {
             objectToUpdate.setImage(command.getImage());
         }
+
         if (command.getUserType() != null) {
             objectToUpdate.setUserType(command.getUserType());
         }
 
-        systemService.update(objectToUpdate);
+        if (command.getStatus() != null) {
+            objectToUpdate.setStatus(command.getStatus());
+        }
 
-        // Invalidar caché del UserMe
+        systemService.update(objectToUpdate);
         evictUserInfoCache(objectToUpdate.getKeyCloakId());
     }
 
-    private void evictUserInfoCache(java.util.UUID keyCloakId) {
-        var cache = cacheManager.getCache(IdentityCacheConfig.USER_INFO_CACHE);
-        if (cache != null && keyCloakId != null) {
-            cache.evict(keyCloakId);
+    private void updateKeycloakIfRequired(
+            UpdateUserSystemCommand command,
+            UserSystemDto currentUser
+    ) {
+        boolean userNameChanged =
+                command.getUserName() != null
+                        && !Objects.equals(
+                                currentUser.getUserName(),
+                                command.getUserName()
+                        );
+
+        boolean emailChanged =
+                command.getEmail() != null
+                        && !Objects.equals(
+                                currentUser.getEmail(),
+                                command.getEmail()
+                        );
+
+        boolean nameChanged =
+                command.getName() != null
+                        && !Objects.equals(
+                                currentUser.getName(),
+                                command.getName()
+                        );
+
+        boolean lastNameChanged =
+                command.getLastName() != null
+                        && !Objects.equals(
+                                currentUser.getLastName(),
+                                command.getLastName()
+                        );
+
+        if (!userNameChanged
+                && !emailChanged
+                && !nameChanged
+                && !lastNameChanged) {
+            return;
         }
+
+        UserRequest userRequest = new UserRequest(
+                command.getUserName() != null
+                        ? command.getUserName()
+                        : currentUser.getUserName(),
+
+                command.getEmail() != null
+                        ? command.getEmail()
+                        : currentUser.getEmail(),
+
+                command.getName() != null
+                        ? command.getName()
+                        : currentUser.getName(),
+
+                command.getLastName() != null
+                        ? command.getLastName()
+                        : currentUser.getLastName(),
+
+                ""
+        );
+
+        keycloakProvider.updateUser(
+                currentUser.getKeyCloakId().toString(),
+                userRequest
+        );
     }
 
-    private void changeValueKeycloack(UpdateUserSystemCommand command, UserSystemDto objectToUpdate) {
-        if (!objectToUpdate.getEmail().equals(command.getEmail()) ||
-                !objectToUpdate.getName().equals(command.getName()) ||
-                !objectToUpdate.getLastName().equals(command.getLastName())) {
+    private void evictUserInfoCache(UUID keyCloakId) {
+        var cache = cacheManager.getCache(
+                IdentityCacheConfig.USER_INFO_CACHE
+        );
 
-            UserRequest userRequest = new UserRequest(
-                    command.getUserName(),
-                    command.getEmail(),
-                    command.getName(),
-                    command.getLastName(),
-                    ""
-            );
-            keycloakProvider.updateUser(objectToUpdate.getKeyCloakId().toString(), userRequest);
+        if (cache != null && keyCloakId != null) {
+            cache.evict(keyCloakId);
         }
     }
 }

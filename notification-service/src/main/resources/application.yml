@@ -1,0 +1,50 @@
+spring:
+  application:
+    name: notification-service
+  profiles:
+    default: local
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/smartpayut_notification}
+    username: ${NOTIFICATION_DB_USER:smartpayut_notification}
+    password: ${NOTIFICATION_DB_PASSWORD:notification_dev_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:smartpayut}
+    password: ${RABBITMQ_PASSWORD:smartpayut_dev_password}
+    listener:
+      simple:
+        auto-startup: ${RABBITMQ_LISTENER_AUTO_STARTUP:true}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/smartpayut/protocol/openid-connect/certs}
+server:
+  port: ${NOTIFICATION_SERVICE_PORT:9914}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+notification:
+  rabbitmq:
+    identity-exchange: ${IDENTITY_EVENTS_EXCHANGE:smartpayut.identity.events}
+    wallet-exchange: ${WALLET_EVENTS_EXCHANGE:smartpayut.wallet.events}
+    payment-exchange: ${PAYMENT_EVENTS_EXCHANGE:smartpayut.payment.events}
+    queue: ${NOTIFICATION_EVENTS_QUEUE:smartpayut.notification.events}
+    dead-letter-exchange: ${NOTIFICATION_DLX:smartpayut.notification.dlx}
+    dead-letter-queue: ${NOTIFICATION_DLQ:smartpayut.notification.events.dlq}

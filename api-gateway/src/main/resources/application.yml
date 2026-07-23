@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    default: local
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/smartpayut/protocol/openid-connect/certs}
+  cloud:
+    gateway:
+      routes:
+        - id: identity-service
+          uri: ${IDENTITY_SERVICE_URL:http://localhost:9910}
+          predicates:
+            - Path=/api/auth/**,/api/users/**
+        - id: wallet-service
+          uri: ${WALLET_SERVICE_URL:http://localhost:9911}
+          predicates:
+            - Path=/api/wallets/**,/api/mobile-payments/balance
+        - id: wallet-mobile-compatibility
+          uri: ${WALLET_SERVICE_URL:http://localhost:9911}
+          predicates:
+            - Path=/api/mobile-wallet,/api/mobile-wallet/**
+          filters:
+            - RewritePath=/api/mobile-wallet/?(?<segment>.*), /api/wallets/me/$\{segment}
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:9912}
+          predicates:
+            - Path=/api/payments/**,/api/mobile-payments/**
+        - id: placetopay-compatibility
+          uri: ${PAYMENT_SERVICE_URL:http://localhost:9912}
+          predicates:
+            - Path=/api/placetopay,/api/placetopay/**
+          filters:
+            - RewritePath=/api/placetopay/?(?<segment>.*), /api/payments/placetopay/$\{segment}
+        - id: transaction-service
+          uri: ${TRANSACTION_SERVICE_URL:http://localhost:9913}
+          predicates:
+            - Path=/api/transactions/**,/api/admin/transactions/**
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URL:http://localhost:9914}
+          predicates:
+            - Path=/api/notifications/**,/api/admin/notifications/**
+server:
+  port: ${API_GATEWAY_PORT:8081}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

@@ -1,0 +1,241 @@
+name: smartpayut-mvp
+
+services:
+  postgres:
+    image: postgres:15.2-alpine
+    container_name: smartpayut-mvp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-smartpayut_postgres_dev}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - smartpayut-postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [smartpayut-network]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: smartpayut-mvp-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - smartpayut-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [smartpayut-network]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    container_name: smartpayut-mvp-keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change_me_admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB_NAME:-smartpayut_keycloak}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER:-smartpayut_keycloak}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak_dev_password}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "${KEYCLOAK_PORT:-8181}:8080"
+    volumes:
+      - ../BackendQrNfc/keycloak/smartpayut-realm.json:/opt/keycloak/data/import/smartpayut-realm.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [smartpayut-network]
+
+  keycloak-bootstrap:
+    image: quay.io/keycloak/keycloak:24.0.1
+    container_name: smartpayut-mvp-keycloak-bootstrap
+    restart: "no"
+    entrypoint: ["/bin/bash", "/opt/smartpayut/configure-smartpayut.sh"]
+    environment:
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-smartpayut}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change_me_admin}
+      PAYMENT_KEYCLOAK_CLIENT_SECRET: ${PAYMENT_KEYCLOAK_CLIENT_SECRET:-smartpayut-payment-secret}
+    volumes:
+      - ./infrastructure/keycloak/configure-smartpayut.sh:/opt/smartpayut/configure-smartpayut.sh:ro
+      - ./infrastructure/keycloak/user-id-mapper.json:/opt/smartpayut/user-id-mapper.json:ro
+    depends_on:
+      keycloak:
+        condition: service_started
+    networks: [smartpayut-network]
+
+  identity-service:
+    build: ./identity-service
+    container_name: smartpayut-identity-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      IDENTITY_DB_URL: jdbc:postgresql://postgres:5432/${IDENTITY_DB_NAME:-smartpayut_identity}
+      IDENTITY_DB_USER: ${IDENTITY_DB_USER:-smartpayut_identity}
+      IDENTITY_DB_PASSWORD: ${IDENTITY_DB_PASSWORD:-identity_dev_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-smartpayut}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-smartpayut-identity}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-smartpayut-identity-secret}
+      KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-smartpayut-identity}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-smartpayut-identity-secret}
+      IDENTITY_SERVICE_PORT: 9910
+    ports: ["${IDENTITY_SERVICE_PORT:-9910}:9910"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      keycloak-bootstrap: {condition: service_completed_successfully}
+    networks: [smartpayut-network]
+
+  wallet-service:
+    build: ./wallet-service
+    container_name: smartpayut-wallet-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      WALLET_DB_URL: jdbc:postgresql://postgres:5432/${WALLET_DB_NAME:-smartpayut_wallet}
+      WALLET_DB_USER: ${WALLET_DB_USER:-smartpayut_wallet}
+      WALLET_DB_PASSWORD: ${WALLET_DB_PASSWORD:-wallet_dev_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      WALLET_SERVICE_PORT: 9911
+      WALLET_LOW_BALANCE_THRESHOLD: ${WALLET_LOW_BALANCE_THRESHOLD:-1.00}
+      RABBITMQ_CONNECTION_TIMEOUT: ${RABBITMQ_CONNECTION_TIMEOUT:-3s}
+    ports: ["${WALLET_SERVICE_PORT:-9911}:9911"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      keycloak: {condition: service_started}
+    networks: [smartpayut-network]
+
+  payment-service:
+    build: ./payment-service
+    container_name: smartpayut-payment-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      PAYMENT_DB_URL: jdbc:postgresql://postgres:5432/${PAYMENT_DB_NAME:-smartpayut_payment}
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER:-smartpayut_payment}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:-payment_dev_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      PAYMENT_SERVICE_PORT: 9912
+      WALLET_SERVICE_URL: http://wallet-service:9911
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/token
+      PAYMENT_KEYCLOAK_CLIENT_ID: ${PAYMENT_KEYCLOAK_CLIENT_ID:-smartpayut-payment}
+      PAYMENT_KEYCLOAK_CLIENT_SECRET: ${PAYMENT_KEYCLOAK_CLIENT_SECRET:-smartpayut-payment-secret}
+      WALLET_SERVICE_TOKEN: ${WALLET_SERVICE_TOKEN:-}
+      PLACETOPAY_BASE_URL: ${PLACETOPAY_BASE_URL:-https://checkout-test.placetopay.ec}
+      PLACETOPAY_LOGIN: ${PLACETOPAY_LOGIN:-}
+      PLACETOPAY_SECRET_KEY: ${PLACETOPAY_SECRET_KEY:-}
+    ports: ["${PAYMENT_SERVICE_PORT:-9912}:9912"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      keycloak-bootstrap: {condition: service_completed_successfully}
+      wallet-service: {condition: service_started}
+    networks: [smartpayut-network]
+
+  transaction-service:
+    build: ./transaction-service
+    container_name: smartpayut-transaction-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      TRANSACTION_DB_URL: jdbc:postgresql://postgres:5432/${TRANSACTION_DB_NAME:-smartpayut_transaction}
+      TRANSACTION_DB_USER: ${TRANSACTION_DB_USER:-smartpayut_transaction}
+      TRANSACTION_DB_PASSWORD: ${TRANSACTION_DB_PASSWORD:-transaction_dev_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      TRANSACTION_SERVICE_PORT: 9913
+    ports: ["${TRANSACTION_SERVICE_PORT:-9913}:9913"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      keycloak: {condition: service_started}
+    networks: [smartpayut-network]
+
+  notification-service:
+    build: ./notification-service
+    container_name: smartpayut-notification-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/${NOTIFICATION_DB_NAME:-smartpayut_notification}
+      NOTIFICATION_DB_USER: ${NOTIFICATION_DB_USER:-smartpayut_notification}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:-notification_dev_password}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-smartpayut}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-smartpayut_dev_password}
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      NOTIFICATION_SERVICE_PORT: 9914
+    ports: ["${NOTIFICATION_SERVICE_PORT:-9914}:9914"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      keycloak: {condition: service_started}
+    networks: [smartpayut-network]
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: smartpayut-api-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      API_GATEWAY_PORT: 8081
+      JWT_JWK_SET_URI: http://keycloak:8080/realms/${KEYCLOAK_REALM:-smartpayut}/protocol/openid-connect/certs
+      IDENTITY_SERVICE_URL: http://identity-service:9910
+      WALLET_SERVICE_URL: http://wallet-service:9911
+      PAYMENT_SERVICE_URL: http://payment-service:9912
+      TRANSACTION_SERVICE_URL: http://transaction-service:9913
+      NOTIFICATION_SERVICE_URL: http://notification-service:9914
+    ports: ["${API_GATEWAY_PORT:-8081}:8081"]
+    depends_on:
+      keycloak: {condition: service_started}
+      identity-service: {condition: service_started}
+      wallet-service: {condition: service_started}
+      payment-service: {condition: service_started}
+      transaction-service: {condition: service_started}
+      notification-service: {condition: service_started}
+    networks: [smartpayut-network]
+
+volumes:
+  smartpayut-postgres-data:
+  smartpayut-rabbitmq-data:
+
+networks:
+  smartpayut-network:
+    name: smartpayut-mvp-network
+    driver: bridge

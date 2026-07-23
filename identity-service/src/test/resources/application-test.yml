@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:identity;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  flyway.enabled: true
+  jpa.hibernate.ddl-auto: validate
+  security.oauth2.resourceserver.jwt.jwk-set-uri: http://localhost:8180/realms/smartpayut/protocol/openid-connect/certs
+keycloak:
+  server-url: http://localhost:65534
+  realm: smartpayut
+  client-id: test-client
+  client-secret: test-secret
+  admin-client-id: test-admin
+  admin-client-secret: test-admin-secret

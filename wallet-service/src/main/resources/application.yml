@@ -1,0 +1,24 @@
+spring:
+  application.name: wallet-service
+  profiles.default: local
+  datasource:
+    url: ${WALLET_DB_URL:jdbc:postgresql://localhost:5432/smartpayut_wallet}
+    username: ${WALLET_DB_USER:smartpayut_wallet}
+    password: ${WALLET_DB_PASSWORD:wallet_dev_password}
+  jpa:
+    hibernate.ddl-auto: validate
+    open-in-view: false
+  flyway.enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:smartpayut}
+    password: ${RABBITMQ_PASSWORD:smartpayut_dev_password}
+    connection-timeout: ${RABBITMQ_CONNECTION_TIMEOUT:3s}
+  security.oauth2.resourceserver.jwt.jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8181/realms/smartpayut/protocol/openid-connect/certs}
+server.port: ${WALLET_SERVICE_PORT:9911}
+management:
+  endpoints.web.exposure.include: health,info,prometheus
+  endpoint.health.probes.enabled: true
+  metrics.tags.application: ${spring.application.name}
+wallet.low-balance-threshold: ${WALLET_LOW_BALANCE_THRESHOLD:1.00}

@@ -1,0 +1,23 @@
+# Maven
+**/target/
+*.class
+*.jar
+*.war
+
+# Variables privadas
+.env
+*.env
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

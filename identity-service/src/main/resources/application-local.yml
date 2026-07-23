@@ -1,0 +1,4 @@
+logging.level.com.smartpayut.identity: INFO
+keycloak:
+  client-secret: ${KEYCLOAK_CLIENT_SECRET:local-client-secret}
+  admin-client-secret: ${KEYCLOAK_ADMIN_CLIENT_SECRET:local-admin-client-secret}

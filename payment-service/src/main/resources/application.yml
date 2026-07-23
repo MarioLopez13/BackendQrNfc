@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: payment-service
+  profiles:
+    default: local
+  datasource:
+    url: ${PAYMENT_DB_URL:jdbc:postgresql://localhost:5432/smartpayut_payment}
+    username: ${PAYMENT_DB_USER:smartpayut_payment}
+    password: ${PAYMENT_DB_PASSWORD:payment_dev_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:smartpayut}
+    password: ${RABBITMQ_PASSWORD:smartpayut_dev_password}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8180/realms/smartpayut/protocol/openid-connect/certs}
+
+server:
+  port: ${PAYMENT_SERVICE_PORT:9912}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+services:
+  wallet:
+    base-url: ${WALLET_SERVICE_URL:http://localhost:9911}
+    service-token: ${WALLET_SERVICE_TOKEN:}
+  keycloak:
+    token-uri: ${KEYCLOAK_TOKEN_URI:http://localhost:8180/realms/smartpayut/protocol/openid-connect/token}
+    client-id: ${PAYMENT_KEYCLOAK_CLIENT_ID:smartpayut-payment}
+    client-secret: ${PAYMENT_KEYCLOAK_CLIENT_SECRET:}
+
+payment:
+  rabbitmq:
+    exchange: ${PAYMENT_EVENTS_EXCHANGE:smartpayut.payment.events}
+  placetopay:
+    base-url: ${PLACETOPAY_BASE_URL:https://checkout-test.placetopay.ec}
+    login: ${PLACETOPAY_LOGIN:}
+    secret-key: ${PLACETOPAY_SECRET_KEY:}
+    default-expiration-minutes: ${PLACETOPAY_EXPIRATION_MINUTES:30}

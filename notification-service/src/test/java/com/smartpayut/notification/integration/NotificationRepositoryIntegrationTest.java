@@ -50,6 +50,16 @@ class NotificationRepositoryIntegrationTest {
     }
 
     @Test
+    void enforcesUniqueBusinessKey() {
+        String referenceId = UUID.randomUUID().toString();
+        repository.saveAndFlush(notification("original-event", userId, referenceId));
+
+        assertThatThrownBy(() -> repository.saveAndFlush(
+                notification("reconciled-event", userId, referenceId)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void paginatesByUserId() {
         repository.saveAndFlush(notification("event-1", userId));
         repository.saveAndFlush(notification("event-2", userId));
@@ -83,7 +93,11 @@ class NotificationRepositoryIntegrationTest {
     }
 
     private Notification notification(String eventId, UUID recipient) {
+        return notification(eventId, recipient, UUID.randomUUID().toString());
+    }
+
+    private Notification notification(String eventId, UUID recipient, String referenceId) {
         return new Notification(eventId, recipient, NotificationType.PAYMENT_COMPLETED,
-                "Pago", "Pago completado", NotificationSource.PAYMENT, UUID.randomUUID().toString(), null);
+                "Pago", "Pago completado", NotificationSource.PAYMENT, referenceId, null);
     }
 }

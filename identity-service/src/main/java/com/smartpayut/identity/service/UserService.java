@@ -52,4 +52,12 @@ public class UserService {
         keycloak.deleteUser(a.getKeycloakId());
         a.markDeleted();
     }
+
+    @Transactional
+    public void deleteById(UUID id) {
+        UserAccount a = accounts.findById(id)
+                .orElseThrow(() -> new IdentityException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        keycloak.deleteUser(a.getKeycloakId());
+        a.markDeleted();
+    }
 }

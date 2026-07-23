@@ -23,7 +23,6 @@ import com.smartpayut.payment.dto.request.PlaceToPayTopUpRequest;
 import com.smartpayut.payment.dto.response.TopUpResponse;
 import com.smartpayut.payment.dto.wallet.WalletResponse;
 import com.smartpayut.payment.mapper.PaymentMapper;
-import com.smartpayut.payment.messaging.publisher.PaymentEventPublisher;
 import com.smartpayut.payment.repository.PaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -39,7 +38,7 @@ class PlaceToPayServiceTest {
     private PlaceToPayClient placeToPayClient;
 
     @Mock
-    private PaymentEventPublisher eventPublisher;
+    private PaymentEventStateService eventStateService;
 
     private PlaceToPayService service;
 
@@ -49,7 +48,7 @@ class PlaceToPayServiceTest {
                 paymentRepository,
                 walletClient,
                 placeToPayClient,
-                eventPublisher,
+                eventStateService,
                 new PaymentMapper(),
                 30);
     }

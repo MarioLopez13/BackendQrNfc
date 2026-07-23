@@ -7,3 +7,7 @@ spring:
   jpa.hibernate.ddl-auto: none
   autoconfigure.exclude: org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
   security.oauth2.resourceserver.jwt.jwk-set-uri: http://localhost:8180/realms/smartpayut/protocol/openid-connect/certs
+
+payment:
+  outbox:
+    enabled: false

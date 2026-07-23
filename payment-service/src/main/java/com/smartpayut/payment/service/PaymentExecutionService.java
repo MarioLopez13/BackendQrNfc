@@ -14,7 +14,6 @@ import com.smartpayut.payment.dto.wallet.WalletMovementResponse;
 import com.smartpayut.payment.dto.wallet.WalletResponse;
 import com.smartpayut.payment.exception.ExternalServiceException;
 import com.smartpayut.payment.mapper.PaymentMapper;
-import com.smartpayut.payment.messaging.publisher.PaymentEventPublisher;
 import com.smartpayut.payment.repository.PaymentRepository;
 import com.smartpayut.payment.util.IdempotencyKeys;
 
@@ -23,17 +22,17 @@ public class PaymentExecutionService {
 
     private final PaymentRepository paymentRepository;
     private final WalletClient walletClient;
-    private final PaymentEventPublisher eventPublisher;
+    private final PaymentEventStateService eventStateService;
     private final PaymentMapper mapper;
 
     public PaymentExecutionService(
             PaymentRepository paymentRepository,
             WalletClient walletClient,
-            PaymentEventPublisher eventPublisher,
+            PaymentEventStateService eventStateService,
             PaymentMapper mapper) {
         this.paymentRepository = paymentRepository;
         this.walletClient = walletClient;
-        this.eventPublisher = eventPublisher;
+        this.eventStateService = eventStateService;
         this.mapper = mapper;
     }
 
@@ -69,14 +68,14 @@ public class PaymentExecutionService {
                 "PAYMENT_DEBIT");
         try {
             WalletMovementResponse movement = walletClient.debit(movementRequest);
-            payment.complete(movement.balanceBefore(), movement.balanceAfter());
-            paymentRepository.save(payment);
-            eventPublisher.publish("payment.completed", payment);
+            payment = eventStateService.complete(
+                    payment,
+                    movement.balanceBefore(),
+                    movement.balanceAfter(),
+                    "payment.completed");
             return mapper.toResponse(payment);
         } catch (ExternalServiceException exception) {
-            payment.fail(exception.getMessage());
-            paymentRepository.save(payment);
-            eventPublisher.publish("payment.failed", payment);
+            eventStateService.fail(payment, exception.getMessage(), "payment.failed");
             throw exception;
         }
     }

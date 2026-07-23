@@ -1,6 +1,7 @@
 package com.smartpayut.identity.repository;
 
 import com.smartpayut.identity.domain.entity.UserAccount;
+import com.smartpayut.identity.domain.enumeration.UserStatus;
 import org.springframework.data.jpa.repository.*;
 import java.util.*;
 
@@ -12,4 +13,6 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, UUID>,
     Optional<UserAccount> findByKeycloakId(UUID keycloakId);
 
     Optional<UserAccount> findByEmailIgnoreCase(String email);
+
+    long countByStatus(UserStatus status);
 }

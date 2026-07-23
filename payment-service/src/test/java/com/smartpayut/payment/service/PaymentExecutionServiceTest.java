@@ -25,7 +25,6 @@ import com.smartpayut.payment.dto.response.PaymentResponse;
 import com.smartpayut.payment.dto.wallet.WalletMovementResponse;
 import com.smartpayut.payment.dto.wallet.WalletResponse;
 import com.smartpayut.payment.mapper.PaymentMapper;
-import com.smartpayut.payment.messaging.publisher.PaymentEventPublisher;
 import com.smartpayut.payment.repository.PaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,7 +37,7 @@ class PaymentExecutionServiceTest {
     private WalletClient walletClient;
 
     @Mock
-    private PaymentEventPublisher eventPublisher;
+    private PaymentEventStateService eventStateService;
 
     private PaymentExecutionService service;
 
@@ -47,7 +46,7 @@ class PaymentExecutionServiceTest {
         service = new PaymentExecutionService(
                 paymentRepository,
                 walletClient,
-                eventPublisher,
+                eventStateService,
                 new PaymentMapper());
     }
 
@@ -66,6 +65,16 @@ class PaymentExecutionServiceTest {
                 new BigDecimal("10.00"),
                 new BigDecimal("9.65"),
                 "reference"));
+        when(eventStateService.complete(
+                any(Payment.class),
+                any(BigDecimal.class),
+                any(BigDecimal.class),
+                eq("payment.completed")))
+                .thenAnswer(invocation -> {
+                    Payment payment = invocation.getArgument(0);
+                    payment.complete(invocation.getArgument(1), invocation.getArgument(2));
+                    return payment;
+                });
 
         PaymentResponse response = service.execute(
                 new PaymentRequest("BUS-12", "Ruta Central", new BigDecimal("0.35")),
@@ -76,7 +85,51 @@ class PaymentExecutionServiceTest {
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(response.updatedBalance()).isEqualByComparingTo("9.65");
         verify(walletClient).debit(any());
-        verify(eventPublisher).publish(eq("payment.completed"), any(Payment.class));
+        verify(eventStateService).complete(
+                any(Payment.class),
+                eq(new BigDecimal("10.00")),
+                eq(new BigDecimal("9.65")),
+                eq("payment.completed"));
+    }
+
+    @Test
+    void executesNfcDebitAndRegistersCompletedEvent() {
+        UUID userId = UUID.randomUUID();
+        UUID walletId = UUID.randomUUID();
+        when(paymentRepository.findByIdempotencyKey("nfc-new")).thenReturn(Optional.empty());
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(walletClient.getCurrentWallet("Bearer user-token"))
+                .thenReturn(new WalletResponse(walletId, userId, new BigDecimal("5.00"), "USD", "ACTIVE"));
+        when(walletClient.debit(any())).thenReturn(new WalletMovementResponse(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                new BigDecimal("0.35"),
+                new BigDecimal("5.00"),
+                new BigDecimal("4.65"),
+                "reference"));
+        when(eventStateService.complete(
+                any(Payment.class),
+                any(BigDecimal.class),
+                any(BigDecimal.class),
+                eq("payment.completed")))
+                .thenAnswer(invocation -> {
+                    Payment payment = invocation.getArgument(0);
+                    payment.complete(invocation.getArgument(1), invocation.getArgument(2));
+                    return payment;
+                });
+
+        PaymentResponse response = service.execute(
+                new PaymentRequest("BUS-15", "Ruta Norte", new BigDecimal("0.35")),
+                PaymentMethod.NFC,
+                "nfc-new",
+                "Bearer user-token");
+
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.COMPLETED);
+        verify(eventStateService).complete(
+                any(Payment.class),
+                eq(new BigDecimal("5.00")),
+                eq(new BigDecimal("4.65")),
+                eq("payment.completed"));
     }
 
     @Test

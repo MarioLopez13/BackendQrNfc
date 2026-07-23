@@ -25,11 +25,19 @@ import com.smartpayut.notification.repository.NotificationRepository;
 import com.smartpayut.notification.repository.ProcessedEventRepository;
 import com.smartpayut.notification.service.InAppNotificationSender;
 import com.smartpayut.notification.service.NotificationMessageFactory;
+import com.smartpayut.notification.service.NotificationPersistenceService;
 import com.smartpayut.notification.service.NotificationProjectionService;
+import com.smartpayut.notification.service.ProcessedEventRecorder;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({NotificationProjectionService.class, NotificationMessageFactory.class, InAppNotificationSender.class})
+@Import({
+        NotificationProjectionService.class,
+        NotificationPersistenceService.class,
+        ProcessedEventRecorder.class,
+        NotificationMessageFactory.class,
+        InAppNotificationSender.class
+})
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class NotificationProjectionRollbackIntegrationTest {

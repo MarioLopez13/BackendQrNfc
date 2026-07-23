@@ -1,6 +1,7 @@
 package com.smartpayut.identity.service;
 
 import com.smartpayut.identity.domain.entity.*;
+import com.smartpayut.identity.domain.enumeration.UserStatus;
 import com.smartpayut.identity.dto.request.UserSearchRequest;
 import com.smartpayut.identity.dto.response.*;
 import com.smartpayut.identity.exception.IdentityException;
@@ -53,6 +54,14 @@ public class UserQueryService {
                 PageRequest.of(request.resolvedPage(), request.resolvedSize(), Sort.by("createdAt").descending()));
         return new PaginatedResponse<>(page.stream().map(this::map).toList(), page.getTotalElements(), page.getNumber(),
                 page.getSize(), page.getTotalPages());
+    }
+
+    public UserSummaryResponse summary() {
+        return new UserSummaryResponse(
+                accounts.count(),
+                accounts.countByStatus(UserStatus.ACTIVE),
+                accounts.countByStatus(UserStatus.INACTIVE),
+                accounts.countByStatus(UserStatus.DELETED));
     }
 
     private UserResponse map(UserAccount a) {

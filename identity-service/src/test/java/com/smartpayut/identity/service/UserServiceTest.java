@@ -43,4 +43,25 @@ class UserServiceTest {
         verify(keycloak).deleteUser(u.getKeycloakId());
         assertEquals(UserStatus.DELETED, u.getStatus());
     }
+
+    @Test
+    void eliminacionAdministrativaSincronizaKeycloakYPostgres() {
+        var u = user();
+        when(accounts.findById(u.getId())).thenReturn(Optional.of(u));
+
+        service.deleteById(u.getId());
+
+        verify(keycloak).deleteUser(u.getKeycloakId());
+        verify(keycloak, never()).authenticate(anyString(), anyString());
+        assertEquals(UserStatus.DELETED, u.getStatus());
+    }
+
+    @Test
+    void eliminacionAdministrativaRechazaUsuarioInexistente() {
+        UUID id = UUID.randomUUID();
+        when(accounts.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(com.smartpayut.identity.exception.IdentityException.class, () -> service.deleteById(id));
+        verifyNoInteractions(keycloak);
+    }
 }

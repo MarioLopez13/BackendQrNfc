@@ -18,6 +18,10 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:smartpayut}
     password: ${RABBITMQ_PASSWORD:smartpayut_dev_password}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   security:
     oauth2:
       resourceserver:
@@ -52,6 +56,12 @@ services:
 payment:
   rabbitmq:
     exchange: ${PAYMENT_EVENTS_EXCHANGE:smartpayut.payment.events}
+  outbox:
+    fixed-delay-ms: ${PAYMENT_OUTBOX_FIXED_DELAY_MS:1000}
+    batch-size: ${PAYMENT_OUTBOX_BATCH_SIZE:20}
+    confirm-timeout-seconds: ${PAYMENT_OUTBOX_CONFIRM_TIMEOUT_SECONDS:5}
+  reconciliation:
+    enabled: ${PAYMENT_RECONCILIATION_ENABLED:false}
   placetopay:
     base-url: ${PLACETOPAY_BASE_URL:https://checkout-test.placetopay.ec}
     login: ${PLACETOPAY_LOGIN:}

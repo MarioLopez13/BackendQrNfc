@@ -20,7 +20,7 @@ public class InAppNotificationSender implements NotificationSender {
 
     @Override
     public Notification send(Notification notification) {
-        Notification saved = repository.save(notification);
+        Notification saved = repository.saveAndFlush(notification);
         LOGGER.info("Notificación in-app {} creada para usuario {}.", saved.getType(), saved.getUserId());
         return saved;
     }

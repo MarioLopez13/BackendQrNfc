@@ -28,6 +28,9 @@ public class Notification {
     @Column(name = "event_id", nullable = false, unique = true, length = 150)
     private String eventId;
 
+    @Column(name = "business_key", nullable = false, unique = true, length = 500)
+    private String businessKey;
+
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
@@ -86,6 +89,7 @@ public class Notification {
         this.source = source;
         this.referenceId = referenceId;
         this.amount = amount;
+        this.businessKey = businessKey(source, type, userId, referenceId, eventId);
     }
 
     @PrePersist
@@ -116,6 +120,10 @@ public class Notification {
 
     public String getEventId() {
         return eventId;
+    }
+
+    public String getBusinessKey() {
+        return businessKey;
     }
 
     public UUID getUserId() {
@@ -160,5 +168,17 @@ public class Notification {
 
     public OffsetDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    private String businessKey(
+            NotificationSource source,
+            NotificationType type,
+            UUID userId,
+            String referenceId,
+            String eventId) {
+        String businessReference = referenceId == null || referenceId.isBlank()
+                ? "EVENT:" + eventId
+                : referenceId;
+        return source + "|" + type + "|" + userId + "|" + businessReference;
     }
 }

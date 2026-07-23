@@ -22,7 +22,6 @@ import com.smartpayut.payment.dto.wallet.WalletMovementResponse;
 import com.smartpayut.payment.dto.wallet.WalletResponse;
 import com.smartpayut.payment.exception.PaymentNotFoundException;
 import com.smartpayut.payment.mapper.PaymentMapper;
-import com.smartpayut.payment.messaging.publisher.PaymentEventPublisher;
 import com.smartpayut.payment.repository.PaymentRepository;
 import com.smartpayut.payment.util.IdempotencyKeys;
 
@@ -32,7 +31,7 @@ public class PlaceToPayService {
     private final PaymentRepository paymentRepository;
     private final WalletClient walletClient;
     private final PlaceToPayClient placeToPayClient;
-    private final PaymentEventPublisher eventPublisher;
+    private final PaymentEventStateService eventStateService;
     private final PaymentMapper mapper;
     private final int defaultExpirationMinutes;
 
@@ -40,13 +39,13 @@ public class PlaceToPayService {
             PaymentRepository paymentRepository,
             WalletClient walletClient,
             PlaceToPayClient placeToPayClient,
-            PaymentEventPublisher eventPublisher,
+            PaymentEventStateService eventStateService,
             PaymentMapper mapper,
             @Value("${payment.placetopay.default-expiration-minutes}") int defaultExpirationMinutes) {
         this.paymentRepository = paymentRepository;
         this.walletClient = walletClient;
         this.placeToPayClient = placeToPayClient;
-        this.eventPublisher = eventPublisher;
+        this.eventStateService = eventStateService;
         this.mapper = mapper;
         this.defaultExpirationMinutes = defaultExpirationMinutes;
     }
@@ -123,9 +122,7 @@ public class PlaceToPayService {
             credit(payment);
         } else if ("REJECTED".equalsIgnoreCase(providerStatus)
                 || "FAILED".equalsIgnoreCase(providerStatus)) {
-            payment.fail(providerMessage);
-            paymentRepository.save(payment);
-            eventPublisher.publish("topup.failed", payment);
+            eventStateService.fail(payment, providerMessage, "topup.failed");
         }
     }
 
@@ -137,9 +134,11 @@ public class PlaceToPayService {
                 payment.getId().toString(),
                 "Recarga PlaceToPay",
                 "TOP_UP"));
-        payment.complete(movement.balanceBefore(), movement.balanceAfter());
-        paymentRepository.save(payment);
-        eventPublisher.publish("topup.completed", payment);
+        eventStateService.complete(
+                payment,
+                movement.balanceBefore(),
+                movement.balanceAfter(),
+                "topup.completed");
     }
 
     private Payment required(UUID topUpId) {

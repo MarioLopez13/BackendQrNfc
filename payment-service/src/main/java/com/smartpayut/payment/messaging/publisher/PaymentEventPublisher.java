@@ -1,37 +1,43 @@
 package com.smartpayut.payment.messaging.publisher;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.amqp.core.DirectExchange;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartpayut.payment.domain.entity.Payment;
+import com.smartpayut.payment.domain.entity.PaymentOutboxEvent;
 import com.smartpayut.payment.event.PaymentEvent;
+import com.smartpayut.payment.repository.PaymentOutboxEventRepository;
 
 @Component
 public class PaymentEventPublisher {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PaymentEventPublisher.class);
+    private final PaymentOutboxEventRepository outboxRepository;
+    private final ObjectMapper objectMapper;
 
-    private final RabbitTemplate rabbitTemplate;
-    private final DirectExchange paymentEventsExchange;
-
-    public PaymentEventPublisher(RabbitTemplate rabbitTemplate, DirectExchange paymentEventsExchange) {
-        this.rabbitTemplate = rabbitTemplate;
-        this.paymentEventsExchange = paymentEventsExchange;
+    public PaymentEventPublisher(
+            PaymentOutboxEventRepository outboxRepository,
+            ObjectMapper objectMapper) {
+        this.outboxRepository = outboxRepository;
+        this.objectMapper = objectMapper;
     }
 
     public void publish(String routingKey, Payment payment) {
+        if (outboxRepository.findByPaymentIdAndEventType(payment.getId(), routingKey).isPresent()) {
+            return;
+        }
+
+        String eventId = deterministicEventId(payment.getId(), routingKey);
         PaymentEvent event = new PaymentEvent(
-                UUID.randomUUID().toString(),
+                eventId,
                 routingKey,
                 1,
-                OffsetDateTime.now(ZoneOffset.UTC),
+                occurredAt(payment),
                 payment.getId(),
                 payment.getUserAccountId(),
                 payment.getWalletId(),
@@ -42,10 +48,30 @@ public class PaymentEventPublisher {
                 payment.getBusCode(),
                 payment.getRouteName(),
                 payment.getFailureReason());
+
         try {
-            rabbitTemplate.convertAndSend(paymentEventsExchange.getName(), routingKey, event);
-        } catch (RuntimeException exception) {
-            LOGGER.error("No fue posible publicar el evento {} del pago {}.", routingKey, payment.getId(), exception);
+            outboxRepository.save(new PaymentOutboxEvent(
+                    eventId,
+                    payment.getId(),
+                    routingKey,
+                    objectMapper.writeValueAsString(event)));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("No fue posible serializar el evento del pago.", exception);
         }
+    }
+
+    private String deterministicEventId(UUID paymentId, String routingKey) {
+        String source = paymentId + ":" + routingKey;
+        return UUID.nameUUIDFromBytes(source.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    private OffsetDateTime occurredAt(Payment payment) {
+        if (payment.getRefundedAt() != null) {
+            return payment.getRefundedAt();
+        }
+        if (payment.getCompletedAt() != null) {
+            return payment.getCompletedAt();
+        }
+        return OffsetDateTime.now(ZoneOffset.UTC);
     }
 }

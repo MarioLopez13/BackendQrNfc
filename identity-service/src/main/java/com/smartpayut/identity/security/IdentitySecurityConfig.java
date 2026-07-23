@@ -2,6 +2,7 @@ package com.smartpayut.identity.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.*;
@@ -21,6 +22,8 @@ public class IdentitySecurityConfig {
                         .requestMatchers("/api/auth/authenticate", "/api/auth/register", "/actuator/health",
                                 "/actuator/info")
                         .permitAll().requestMatchers("/api/users/me", "/api/auth/delete-account").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/users").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/users/*").hasRole("ADMIN")
                         .requestMatchers("/api/users/search", "/api/users/*").hasAnyRole("ADMIN", "OPERATOR")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakRoles())))

@@ -12,32 +12,27 @@ import com.smartpayut.payment.dto.wallet.WalletMovementRequest;
 import com.smartpayut.payment.exception.ExternalServiceException;
 import com.smartpayut.payment.exception.PaymentConflictException;
 import com.smartpayut.payment.mapper.PaymentMapper;
-import com.smartpayut.payment.messaging.publisher.PaymentEventPublisher;
 import com.smartpayut.payment.repository.PaymentRefundRepository;
-import com.smartpayut.payment.repository.PaymentRepository;
 
 @Service
 public class RefundService {
 
     private final PaymentQueryService queryService;
-    private final PaymentRepository paymentRepository;
     private final PaymentRefundRepository refundRepository;
     private final WalletClient walletClient;
-    private final PaymentEventPublisher eventPublisher;
+    private final PaymentEventStateService eventStateService;
     private final PaymentMapper mapper;
 
     public RefundService(
             PaymentQueryService queryService,
-            PaymentRepository paymentRepository,
             PaymentRefundRepository refundRepository,
             WalletClient walletClient,
-            PaymentEventPublisher eventPublisher,
+            PaymentEventStateService eventStateService,
             PaymentMapper mapper) {
         this.queryService = queryService;
-        this.paymentRepository = paymentRepository;
         this.refundRepository = refundRepository;
         this.walletClient = walletClient;
-        this.eventPublisher = eventPublisher;
+        this.eventStateService = eventStateService;
         this.mapper = mapper;
     }
 
@@ -65,10 +60,8 @@ public class RefundService {
         try {
             walletClient.refund(walletRequest);
             refund.complete();
-            payment.refund();
             refundRepository.save(refund);
-            paymentRepository.save(payment);
-            eventPublisher.publish("payment.refunded", payment);
+            eventStateService.refund(payment);
             return mapper.toRefundResponse(refund);
         } catch (ExternalServiceException exception) {
             refund.fail(exception.getMessage());

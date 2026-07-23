@@ -14,6 +14,8 @@ public interface NotificationRepository
 
     Optional<Notification> findByIdAndUserId(UUID id, UUID userId);
 
+    boolean existsByBusinessKey(String businessKey);
+
     long countByUserIdAndStatus(UUID userId, NotificationStatus status);
 
     long countByUserIdAndStatusNot(UUID userId, NotificationStatus status);

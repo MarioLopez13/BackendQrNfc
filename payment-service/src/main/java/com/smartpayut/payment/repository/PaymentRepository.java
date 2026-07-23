@@ -7,6 +7,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.smartpayut.payment.domain.entity.Payment;
+import com.smartpayut.payment.domain.enumeration.PaymentMethod;
+import com.smartpayut.payment.domain.enumeration.PaymentStatus;
 
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
@@ -17,4 +19,6 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findAllByUserAccountIdOrderByCreatedAtDesc(UUID userAccountId);
 
     List<Payment> findAllByOrderByCreatedAtDesc();
+
+    List<Payment> findAllByStatusAndMethodIn(PaymentStatus status, List<PaymentMethod> methods);
 }

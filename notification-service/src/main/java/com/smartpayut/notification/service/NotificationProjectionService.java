@@ -3,17 +3,15 @@ package com.smartpayut.notification.service;
 import java.util.Set;
 import java.util.UUID;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.smartpayut.notification.domain.entity.Notification;
-import com.smartpayut.notification.domain.entity.ProcessedEvent;
 import com.smartpayut.notification.domain.enumeration.NotificationSource;
 import com.smartpayut.notification.domain.enumeration.NotificationType;
 import com.smartpayut.notification.event.IdentityUserCreatedEvent;
 import com.smartpayut.notification.event.PaymentEvent;
 import com.smartpayut.notification.event.WalletEvent;
-import com.smartpayut.notification.repository.ProcessedEventRepository;
 import com.smartpayut.notification.service.NotificationMessageFactory.MessageContent;
 
 @Service
@@ -25,20 +23,19 @@ public class NotificationProjectionService {
             "payment.completed", "payment.failed", "payment.refunded",
             "topup.completed", "topup.failed");
 
-    private final ProcessedEventRepository processedEventRepository;
     private final NotificationMessageFactory messageFactory;
-    private final NotificationSender sender;
+    private final NotificationPersistenceService persistenceService;
+    private final ProcessedEventRecorder processedEventRecorder;
 
     public NotificationProjectionService(
-            ProcessedEventRepository processedEventRepository,
             NotificationMessageFactory messageFactory,
-            NotificationSender sender) {
-        this.processedEventRepository = processedEventRepository;
+            NotificationPersistenceService persistenceService,
+            ProcessedEventRecorder processedEventRecorder) {
         this.messageFactory = messageFactory;
-        this.sender = sender;
+        this.persistenceService = persistenceService;
+        this.processedEventRecorder = processedEventRecorder;
     }
 
-    @Transactional
     public void process(IdentityUserCreatedEvent event) {
         required(event.eventId(), "eventId");
         required(event.userId(), "userId");
@@ -46,10 +43,7 @@ public class NotificationProjectionService {
             throw new IllegalArgumentException("Evento Identity no soportado.");
         }
         String eventId = event.eventId().toString();
-        if (processedEventRepository.existsById(eventId)) {
-            return;
-        }
-        sender.send(new Notification(
+        persist(new Notification(
                 eventId,
                 event.userId(),
                 NotificationType.WELCOME,
@@ -57,40 +51,29 @@ public class NotificationProjectionService {
                 "Tu cuenta fue creada correctamente.",
                 NotificationSource.IDENTITY,
                 event.userId().toString(),
-                null));
-        processedEventRepository.save(new ProcessedEvent(eventId, event.eventType()));
+                null), event.eventType());
     }
 
-    @Transactional
     public void process(WalletEvent event) {
         validateWallet(event);
         String eventId = event.eventId().toString();
-        if (processedEventRepository.existsById(eventId)) {
-            return;
-        }
         MessageContent content = messageFactory.forWallet(event);
         String reference = event.referenceId() != null
                 ? event.referenceId()
                 : optionalUuid(event.movementId(), event.walletId());
-        sender.send(new Notification(
+        persist(new Notification(
                 eventId, event.userId(), messageFactory.type(event.eventType()),
                 content.title(), content.message(), NotificationSource.WALLET,
-                reference, event.amount()));
-        processedEventRepository.save(new ProcessedEvent(eventId, event.eventType()));
+                reference, event.amount()), event.eventType());
     }
 
-    @Transactional
     public void process(PaymentEvent event) {
         validatePayment(event);
-        if (processedEventRepository.existsById(event.eventId())) {
-            return;
-        }
         MessageContent content = messageFactory.forPayment(event);
-        sender.send(new Notification(
+        persist(new Notification(
                 event.eventId(), event.userId(), messageFactory.type(event.eventType()),
                 content.title(), content.message(), NotificationSource.PAYMENT,
-                event.paymentId().toString(), event.amount()));
-        processedEventRepository.save(new ProcessedEvent(event.eventId(), event.eventType()));
+                event.paymentId().toString(), event.amount()), event.eventType());
     }
 
     private void validateWallet(WalletEvent event) {
@@ -123,5 +106,19 @@ public class NotificationProjectionService {
     private String optionalUuid(UUID first, UUID second) {
         UUID value = first == null ? second : first;
         return value == null ? null : value.toString();
+    }
+
+    private void persist(Notification notification, String eventType) {
+        try {
+            persistenceService.persist(notification, eventType);
+        } catch (DataIntegrityViolationException exception) {
+            boolean duplicate = processedEventRecorder.recordDuplicate(
+                    notification.getEventId(),
+                    eventType,
+                    notification.getBusinessKey());
+            if (!duplicate) {
+                throw exception;
+            }
+        }
     }
 }

@@ -36,4 +36,11 @@ public class ProcessedEventRecorder {
         }
         return true;
     }
+
+    @Transactional
+    public void recordIgnored(String eventId, String eventType) {
+        if (!processedEventRepository.existsById(eventId)) {
+            processedEventRepository.save(new ProcessedEvent(eventId, eventType));
+        }
+    }
 }

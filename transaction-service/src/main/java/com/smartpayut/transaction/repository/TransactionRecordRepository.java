@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.smartpayut.transaction.domain.entity.TransactionRecord;
 import com.smartpayut.transaction.domain.enumeration.TransactionStatus;
+import com.smartpayut.transaction.domain.enumeration.TransactionType;
 import com.smartpayut.transaction.repository.projection.DailyOperationCount;
 import com.smartpayut.transaction.repository.projection.TransactionMethodCount;
 import com.smartpayut.transaction.repository.projection.TransactionStatusCount;
@@ -25,6 +26,11 @@ public interface TransactionRecordRepository extends JpaRepository<TransactionRe
     Optional<TransactionRecord> findByIdAndUserAccountId(UUID id, UUID userAccountId);
 
     Page<TransactionRecord> findAllByUserAccountId(UUID userAccountId, Pageable pageable);
+
+    Page<TransactionRecord> findAllByUserAccountIdAndTransactionTypeNot(
+            UUID userAccountId,
+            TransactionType transactionType,
+            Pageable pageable);
 
     long countByOccurredAtBetween(OffsetDateTime start, OffsetDateTime end);
 

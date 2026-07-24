@@ -67,3 +67,5 @@ payment:
     login: ${PLACETOPAY_LOGIN:}
     secret-key: ${PLACETOPAY_SECRET_KEY:}
     default-expiration-minutes: ${PLACETOPAY_EXPIRATION_MINUTES:30}
+    simulation-enabled: false
+    simulation-process-url-base: ${PLACETOPAY_SIMULATION_PROCESS_URL_BASE:http://localhost:5174/#/top-up/simulated}

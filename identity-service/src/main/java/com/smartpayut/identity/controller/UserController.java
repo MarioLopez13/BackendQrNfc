@@ -17,11 +17,17 @@ public class UserController {
     private final UserQueryService queries;
     private final UserService users;
     private final UserRegistrationService registration;
+    private final UserReconciliationService reconciliation;
 
-    public UserController(UserQueryService q, UserService u, UserRegistrationService r) {
+    public UserController(
+            UserQueryService q,
+            UserService u,
+            UserRegistrationService r,
+            UserReconciliationService reconciliation) {
         queries = q;
         users = u;
         registration = r;
+        this.reconciliation = reconciliation;
     }
 
     @PostMapping
@@ -33,6 +39,13 @@ public class UserController {
     @GetMapping("/me")
     public ApiResponse<UserResponse> me(@AuthenticationPrincipal Jwt jwt) {
         return ApiResponse.success("Usuario autenticado", queries.me(jwt.getSubject()));
+    }
+
+    @PostMapping("/me/reconcile")
+    public ApiResponse<UserResponse> reconcile(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.success(
+                "Cuenta local reconciliada",
+                reconciliation.reconcile(jwt));
     }
 
     @PostMapping("/search")

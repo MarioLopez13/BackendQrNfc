@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +62,19 @@ class NotificationProjectionServiceTest {
         WalletEvent event = wallet("wallet.credited", new BigDecimal("10.00"));
         service.process(event);
         assertSent(NotificationType.WALLET_CREDITED);
+    }
+
+    @Test
+    void recordsTopUpWalletCreditWithoutCreatingDuplicateBusinessNotification() {
+        WalletEvent event = wallet(
+                "wallet.credited",
+                new BigDecimal("3.00"),
+                "topup:" + UUID.randomUUID() + ":credit");
+
+        service.process(event);
+
+        verify(processedEventRecorder).recordIgnored(event.eventId().toString(), event.eventType());
+        verify(persistenceService, never()).persist(any(), anyString());
     }
 
     @Test
@@ -150,8 +164,12 @@ class NotificationProjectionServiceTest {
     }
 
     private WalletEvent wallet(String type, BigDecimal amount) {
+        return wallet(type, amount, "key");
+    }
+
+    private WalletEvent wallet(String type, BigDecimal amount, String idempotencyKey) {
         return new WalletEvent(UUID.randomUUID(), type, 1, OffsetDateTime.now(),
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), amount,
-                BigDecimal.ZERO, amount, "USD", null, "key");
+                BigDecimal.ZERO, amount, "USD", null, idempotencyKey);
     }
 }

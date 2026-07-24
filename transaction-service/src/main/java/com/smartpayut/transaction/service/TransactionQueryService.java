@@ -8,6 +8,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.smartpayut.transaction.domain.enumeration.TransactionType;
 import com.smartpayut.transaction.dto.response.PageResponse;
 import com.smartpayut.transaction.dto.response.TransactionResponse;
 import com.smartpayut.transaction.exception.TransactionNotFoundException;
@@ -35,7 +36,10 @@ public class TransactionQueryService {
     public PageResponse<TransactionResponse> mine(UUID userId, int page, int pageSize) {
         paginationValidator.validate(page, pageSize);
         Page<TransactionResponse> result = repository
-                .findAllByUserAccountId(userId, pageable(page, pageSize))
+                .findAllByUserAccountIdAndTransactionTypeNot(
+                        userId,
+                        TransactionType.WALLET_CREATED,
+                        pageable(page, pageSize))
                 .map(mapper::toResponse);
         return PageResponse.from(result);
     }

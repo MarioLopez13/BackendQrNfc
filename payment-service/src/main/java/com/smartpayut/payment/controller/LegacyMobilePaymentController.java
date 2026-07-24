@@ -79,10 +79,12 @@ public class LegacyMobilePaymentController {
     }
 
     @PostMapping("/top-up/{topUpId}/confirm")
-    public ApiResponse<PaymentResponse> confirm(@PathVariable UUID topUpId) {
+    public ApiResponse<PaymentResponse> confirm(
+            @PathVariable UUID topUpId,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String bearerToken) {
         return ApiResponse.ok(
                 "Estado de recarga PlaceToPay consultado correctamente.",
-                placeToPayService.confirm(topUpId));
+                placeToPayService.confirm(topUpId, bearerToken));
     }
 
     @GetMapping

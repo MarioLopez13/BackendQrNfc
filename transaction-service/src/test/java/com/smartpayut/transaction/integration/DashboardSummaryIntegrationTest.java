@@ -36,9 +36,10 @@ class DashboardSummaryIntegrationTest {
 
     @Test
     void calculatesAggregatesAndIncludesDaysWithoutOperations() {
-        LocalDate today = OffsetDateTime.now(ZoneOffset.UTC).toLocalDate();
-        store(TransactionStatus.COMPLETED, "QR", "10.50", today.atTime(10, 0).atOffset(ZoneOffset.UTC));
-        store(TransactionStatus.PENDING, "QR", "8.00", today.atTime(11, 0).atOffset(ZoneOffset.UTC));
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        LocalDate today = now.toLocalDate();
+        store(TransactionStatus.COMPLETED, "QR", "10.50", now.minusSeconds(2));
+        store(TransactionStatus.PENDING, "QR", "8.00", now.minusSeconds(1));
         store(TransactionStatus.FAILED, "NFC", "3.00",
                 today.minusDays(1).atTime(12, 0).atOffset(ZoneOffset.UTC));
         store(TransactionStatus.REFUNDED, "NFC", "2.00",

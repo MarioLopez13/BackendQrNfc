@@ -57,6 +57,10 @@ public class NotificationProjectionService {
     public void process(WalletEvent event) {
         validateWallet(event);
         String eventId = event.eventId().toString();
+        if (isTopUpWalletCredit(event)) {
+            processedEventRecorder.recordIgnored(eventId, event.eventType());
+            return;
+        }
         MessageContent content = messageFactory.forWallet(event);
         String reference = event.referenceId() != null
                 ? event.referenceId()
@@ -94,6 +98,12 @@ public class NotificationProjectionService {
         if (event.eventType() == null || !PAYMENT_EVENTS.contains(event.eventType())) {
             throw new IllegalArgumentException("Evento Payment no soportado.");
         }
+    }
+
+    private boolean isTopUpWalletCredit(WalletEvent event) {
+        return "wallet.credited".equals(event.eventType())
+                && event.idempotencyKey() != null
+                && event.idempotencyKey().startsWith("topup:");
     }
 
     private <T> T required(T value, String field) {

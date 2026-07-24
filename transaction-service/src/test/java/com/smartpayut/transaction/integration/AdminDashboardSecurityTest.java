@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.smartpayut.transaction.controller.AdminTransactionController;
 import com.smartpayut.transaction.dto.response.DashboardSummaryResponse;
+import com.smartpayut.transaction.dto.response.PageResponse;
 import com.smartpayut.transaction.security.TransactionSecurityConfig;
 import com.smartpayut.transaction.service.DashboardQueryService;
 import com.smartpayut.transaction.service.TransactionQueryService;
@@ -41,6 +42,8 @@ class AdminDashboardSecurityTest {
 
     @BeforeEach
     void configureSummary() {
+        when(transactionQueryService.all(0, 20))
+                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
         when(dashboardQueryService.summary(anyInt())).thenAnswer(invocation -> {
             int days = invocation.getArgument(0);
             if (days < 1 || days > 90) {
@@ -87,6 +90,16 @@ class AdminDashboardSecurityTest {
                 .andExpect(jsonPath("$.message").value("Resumen del Dashboard obtenido correctamente"));
 
         verify(dashboardQueryService).summary(7);
+    }
+
+    @Test
+    void adminTransactionEndpointStillReturnsTheGlobalHistory() throws Exception {
+        mvc.perform(get("/api/admin/transactions")
+                .with(jwt().authorities(() -> "ROLE_ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(transactionQueryService).all(0, 20);
     }
 
     @Test

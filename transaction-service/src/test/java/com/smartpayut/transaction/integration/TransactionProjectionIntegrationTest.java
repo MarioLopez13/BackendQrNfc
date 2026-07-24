@@ -15,13 +15,21 @@ import org.springframework.test.context.TestPropertySource;
 
 import com.smartpayut.transaction.event.PaymentEvent;
 import com.smartpayut.transaction.event.WalletEvent;
+import com.smartpayut.transaction.mapper.TransactionMapper;
 import com.smartpayut.transaction.repository.ProcessedEventRepository;
 import com.smartpayut.transaction.repository.TransactionRecordRepository;
 import com.smartpayut.transaction.service.EventProjectionService;
+import com.smartpayut.transaction.service.TransactionQueryService;
+import com.smartpayut.transaction.validator.PaginationValidator;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(EventProjectionService.class)
+@Import({
+        EventProjectionService.class,
+        TransactionQueryService.class,
+        TransactionMapper.class,
+        PaginationValidator.class
+})
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=create-drop")
 class TransactionProjectionIntegrationTest {
 
@@ -33,6 +41,9 @@ class TransactionProjectionIntegrationTest {
 
     @Autowired
     private ProcessedEventRepository processedEventRepository;
+
+    @Autowired
+    private TransactionQueryService queryService;
 
     @Test
     void storesProjectionAndProcessedEventAtomically() {
@@ -114,6 +125,30 @@ class TransactionProjectionIntegrationTest {
         assertThat(processedEventRepository.count()).isEqualTo(2);
     }
 
+    @Test
+    void personalHistoryIsIsolatedAndExcludesWalletCreation() {
+        UUID userA = UUID.randomUUID();
+        UUID userB = UUID.randomUUID();
+        UUID walletA = UUID.randomUUID();
+        UUID walletB = UUID.randomUUID();
+
+        projectionService.process(walletCreatedEvent(walletA, userA));
+        projectionService.process(walletCreatedEvent(walletB, userB));
+        projectionService.process(paymentEvent(
+                "payment-user-a",
+                UUID.randomUUID(),
+                walletA,
+                userA));
+
+        var historyA = queryService.mine(userA, 0, 20);
+        var historyB = queryService.mine(userB, 0, 20);
+
+        assertThat(historyA.totalElements()).isOne();
+        assertThat(historyA.items()).allMatch(item -> item.userId().equals(userA));
+        assertThat(historyB.totalElements()).isZero();
+        assertThat(historyB.items()).isEmpty();
+    }
+
     private PaymentEvent paymentEvent(
             String eventId,
             UUID paymentId,
@@ -125,8 +160,8 @@ class TransactionProjectionIntegrationTest {
                 1,
                 OffsetDateTime.now(),
                 paymentId,
-                walletId,
                 userId,
+                walletId,
                 "QR",
                 "COMPLETED",
                 new BigDecimal("3.50"),
@@ -151,5 +186,22 @@ class TransactionProjectionIntegrationTest {
                 "USD",
                 paymentId.toString(),
                 "payment:" + paymentId);
+    }
+
+    private WalletEvent walletCreatedEvent(UUID walletId, UUID userId) {
+        return new WalletEvent(
+                UUID.randomUUID(),
+                "wallet.created",
+                1,
+                OffsetDateTime.now(),
+                walletId,
+                userId,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                "USD",
+                null,
+                null);
     }
 }

@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -19,7 +20,9 @@ import com.smartpayut.transaction.repository.projection.DailyOperationCount;
 import com.smartpayut.transaction.repository.projection.TransactionMethodCount;
 import com.smartpayut.transaction.repository.projection.TransactionStatusCount;
 
-public interface TransactionRecordRepository extends JpaRepository<TransactionRecord, UUID> {
+public interface TransactionRecordRepository
+        extends JpaRepository<TransactionRecord, UUID>,
+        JpaSpecificationExecutor<TransactionRecord> {
 
     Optional<TransactionRecord> findByCorrelationId(String correlationId);
 

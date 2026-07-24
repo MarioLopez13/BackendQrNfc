@@ -1,6 +1,7 @@
 package com.smartpayut.transaction.integration;
 
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -9,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -42,7 +44,15 @@ class AdminDashboardSecurityTest {
 
     @BeforeEach
     void configureSummary() {
-        when(transactionQueryService.all(0, 20))
+        when(transactionQueryService.all(
+                anyInt(),
+                anyInt(),
+                nullable(String.class),
+                nullable(String.class),
+                nullable(String.class),
+                nullable(String.class),
+                nullable(LocalDate.class),
+                nullable(LocalDate.class)))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0));
         when(dashboardQueryService.summary(anyInt())).thenAnswer(invocation -> {
             int days = invocation.getArgument(0);
@@ -99,7 +109,40 @@ class AdminDashboardSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
-        verify(transactionQueryService).all(0, 20);
+        verify(transactionQueryService).all(
+                0,
+                20,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
+    }
+
+    @Test
+    void rejectsAnInvertedAdministrativeDateRange() throws Exception {
+        LocalDate from = LocalDate.of(2026, 7, 24);
+        LocalDate to = LocalDate.of(2026, 7, 1);
+        when(transactionQueryService.all(
+                0,
+                20,
+                null,
+                null,
+                null,
+                null,
+                from,
+                to))
+                .thenThrow(new IllegalArgumentException(
+                        "from no puede ser posterior a to."));
+
+        mvc.perform(get("/api/admin/transactions")
+                .param("from", from.toString())
+                .param("to", to.toString())
+                .with(jwt().authorities(() -> "ROLE_ADMIN")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("from no puede ser posterior a to."));
     }
 
     @Test

@@ -1,5 +1,8 @@
 package com.smartpayut.transaction.controller;
 
+import java.time.LocalDate;
+
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,10 +34,28 @@ public class AdminTransactionController {
     @GetMapping
     public ApiResponse<PageResponse<TransactionResponse>> all(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String method,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate to) {
         return ApiResponse.ok(
                 "Historial administrativo consultado correctamente.",
-                queryService.all(page, pageSize));
+                queryService.all(
+                        page,
+                        pageSize,
+                        search,
+                        type,
+                        method,
+                        status,
+                        from,
+                        to));
     }
 
     @GetMapping("/dashboard")

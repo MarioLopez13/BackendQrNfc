@@ -1,0 +1,15 @@
+Fecha y hora: 2026-07-26T19:08:19.1764405-05:00
+Método HTTP: POST
+Endpoint: http://localhost:8081/api/payments/qr
+Authorization: Bearer [TOKEN OCULTO]
+Idempotency-Key: CP10-2026-001
+Content-Type: application/json
+
+Cuerpo enviado:
+{
+    "busCode":  "CP10-BUS",
+    "routeName":  "CP10-RUTA",
+    "amount":  1
+}
+
+Código HTTP: 200

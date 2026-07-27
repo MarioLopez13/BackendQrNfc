@@ -1,0 +1,20 @@
+Fecha y hora: 2026-07-26T19:08:19.6413319-05:00
+
+Base de datos 1: smartpayut_payment
+Tabla: payments
+Consulta SQL:
+SELECT COUNT(*) FROM payments WHERE idempotency_key = 'CP10-2026-001';
+
+Resultado:
+count = 1
+
+Base de datos 2: smartpayut_wallet
+Tabla: wallet_movement
+Consulta SQL:
+SELECT COUNT(*) FROM wallet_movement WHERE reference_id = '1ab699e9-0e6e-4d6d-8de5-cfea9472b727';
+
+Resultado:
+count = 1
+
+Cantidad de pagos encontrados: 1
+Cantidad de movimientos de débito encontrados: 1

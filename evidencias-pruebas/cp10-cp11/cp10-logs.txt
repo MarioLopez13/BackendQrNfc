@@ -1,0 +1,9 @@
+Fecha y hora de revisión: 2026-07-26T19:08:19.7867486-05:00
+Microservicio: payment-service
+Periodo revisado desde: 2026-07-26T19:08:17.9299020-05:00
+
+No se encontraron mensajes específicos de idempotencia, solicitud duplicada
+o recuperación de respuesta anterior en los logs reales del servicio.
+
+La comprobación se sustenta con las dos respuestas HTTP y las consultas
+precisas a smartpayut_payment.payments y smartpayut_wallet.wallet_movement.

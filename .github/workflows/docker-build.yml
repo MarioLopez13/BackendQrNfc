@@ -1,0 +1,110 @@
+# ============================================
+# CI — Build & Push SmartPayUT Microservices
+# ============================================
+# Push to main/dev: builds only changed services.
+# Manual execution: builds all six services.
+# ============================================
+
+name: Build & Push Microservices
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'api-gateway/**'
+      - 'identity-service/**'
+      - 'wallet-service/**'
+      - 'payment-service/**'
+      - 'transaction-service/**'
+      - 'notification-service/**'
+      - '.github/workflows/docker-build.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.services.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api-gateway:
+              - 'api-gateway/**'
+              - '.github/workflows/docker-build.yml'
+            identity-service:
+              - 'identity-service/**'
+              - '.github/workflows/docker-build.yml'
+            wallet-service:
+              - 'wallet-service/**'
+              - '.github/workflows/docker-build.yml'
+            payment-service:
+              - 'payment-service/**'
+              - '.github/workflows/docker-build.yml'
+            transaction-service:
+              - 'transaction-service/**'
+              - '.github/workflows/docker-build.yml'
+            notification-service:
+              - 'notification-service/**'
+              - '.github/workflows/docker-build.yml'
+
+      - name: Select services
+        id: services
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            services='["api-gateway","identity-service","wallet-service","payment-service","transaction-service","notification-service"]'
+          else
+            services='${{ steps.filter.outputs.changes }}'
+          fi
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    name: ${{ matrix.service }} - Build & Push
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase owner
+        shell: bash
+        run: echo "OWNER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          file: ./${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ env.OWNER }}/smartpayut-${{ matrix.service }}-dev:latest
+            ghcr.io/${{ env.OWNER }}/smartpayut-${{ matrix.service }}-dev:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

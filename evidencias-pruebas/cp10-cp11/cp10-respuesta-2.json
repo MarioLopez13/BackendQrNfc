@@ -1,0 +1,20 @@
+﻿{
+    "success":  true,
+    "message":  "Pago QR procesado correctamente.",
+    "data":  {
+                 "id":  "1ab699e9-0e6e-4d6d-8de5-cfea9472b727",
+                 "transactionId":  "1ab699e9-0e6e-4d6d-8de5-cfea9472b727",
+                 "userId":  "c4308fdf-f757-4e61-9e62-deaba6b4dd90",
+                 "method":  "QR",
+                 "paymentStatus":  "COMPLETED",
+                 "status":  "Completado",
+                 "amount":  1.00,
+                 "currency":  "USD",
+                 "busCode":  "CP10-BUS",
+                 "routeName":  "CP10-RUTA",
+                 "previousBalance":  5.00,
+                 "updatedBalance":  4.00,
+                 "processedAt":  "2026-07-27T00:08:19.189166Z",
+                 "failureReason":  null
+             }
+}

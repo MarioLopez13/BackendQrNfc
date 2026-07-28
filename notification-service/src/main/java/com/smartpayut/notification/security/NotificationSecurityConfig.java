@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
@@ -21,6 +22,9 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class NotificationSecurityConfig {
 
+    @Value("${spring.security.oauth2.resourceserver.jwt.resource-id:smartpayut-admin}")
+    private String resourceId;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable())
@@ -36,15 +40,26 @@ public class NotificationSecurityConfig {
     private Converter<Jwt, ? extends AbstractAuthenticationToken> roles() {
         return jwt -> {
             Set<String> roles = new HashSet<>();
-            Object realmAccess = jwt.getClaim("realm_access");
-            if (realmAccess instanceof Map<?, ?> claims
-                    && claims.get("roles") instanceof Collection<?> realmRoles) {
-                realmRoles.stream().map(Object::toString).map(String::toUpperCase)
-                        .filter(Set.of("ADMIN", "OPERATOR", "USER", "SERVICE")::contains)
-                        .map(role -> "ROLE_" + role).forEach(roles::add);
+            extractRoles(jwt.getClaim("realm_access"), roles);
+            Object resourceAccess = jwt.getClaim("resource_access");
+            if (resourceAccess instanceof Map<?, ?> clients
+                    && clients.get(resourceId) instanceof Map<?, ?> clientAccess) {
+                extractRoles(clientAccess, roles);
             }
             return new JwtAuthenticationToken(jwt,
                     roles.stream().map(SimpleGrantedAuthority::new).toList(), jwt.getSubject());
         };
+    }
+
+    private void extractRoles(Object accessClaim, Set<String> target) {
+        if (accessClaim instanceof Map<?, ?> map
+                && map.get("roles") instanceof Collection<?> values) {
+            values.stream()
+                    .map(Object::toString)
+                    .map(String::toUpperCase)
+                    .filter(Set.of("ADMIN", "OPERATOR", "USER", "SERVICE")::contains)
+                    .map(role -> "ROLE_" + role)
+                    .forEach(target::add);
+        }
     }
 }

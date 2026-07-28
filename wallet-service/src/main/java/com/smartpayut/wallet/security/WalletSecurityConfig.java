@@ -1,5 +1,6 @@
 package com.smartpayut.wallet.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -8,10 +9,15 @@ import org.springframework.security.oauth2.server.resource.authentication.*;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.util.*;
 
 @Configuration
 public class WalletSecurityConfig {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.resource-id:smartpayut-admin}")
+    private String resourceId;
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(c -> c.disable())
@@ -23,15 +29,28 @@ public class WalletSecurityConfig {
 
     private Converter<Jwt, ? extends AbstractAuthenticationToken> roles() {
         return jwt -> {
-            Set<String> r = new HashSet<>();
-            Object c = jwt.getClaim("realm_access");
-            if (c instanceof Map<?, ?> m && m.get("roles") instanceof Collection<?> v)
-                v.stream().map(Object::toString).map(String::toUpperCase)
-                        .filter(Set.of("ADMIN", "OPERATOR", "USER", "SERVICE")::contains).map(x -> "ROLE_" + x)
-                        .forEach(r::add);
+            Set<String> roles = new HashSet<>();
+            extractRoles(jwt.getClaim("realm_access"), roles);
+            Object resourceAccess = jwt.getClaim("resource_access");
+            if (resourceAccess instanceof Map<?, ?> clients
+                    && clients.get(resourceId) instanceof Map<?, ?> clientAccess) {
+                extractRoles(clientAccess, roles);
+            }
             return new JwtAuthenticationToken(jwt,
-                    r.stream().map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList(),
+                    roles.stream().map(SimpleGrantedAuthority::new).toList(),
                     jwt.getSubject());
         };
+    }
+
+    private void extractRoles(Object accessClaim, Set<String> target) {
+        if (accessClaim instanceof Map<?, ?> map
+                && map.get("roles") instanceof Collection<?> values) {
+            values.stream()
+                    .map(Object::toString)
+                    .map(String::toUpperCase)
+                    .filter(Set.of("ADMIN", "OPERATOR", "USER", "SERVICE")::contains)
+                    .map(role -> "ROLE_" + role)
+                    .forEach(target::add);
+        }
     }
 }

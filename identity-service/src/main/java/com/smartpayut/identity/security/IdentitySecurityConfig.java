@@ -1,5 +1,6 @@
 package com.smartpayut.identity.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -8,12 +9,16 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.*;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import java.util.*;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class IdentitySecurityConfig {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.resource-id:smartpayut-admin}")
+    private String resourceId;
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http.csrf(csrf -> csrf.disable())
@@ -33,14 +38,29 @@ public class IdentitySecurityConfig {
     private Converter<Jwt, ? extends AbstractAuthenticationToken> keycloakRoles() {
         return jwt -> {
             Set<String> roles = new HashSet<>();
-            Object claim = jwt.getClaim("realm_access");
-            if (claim instanceof Map<?, ?> map && map.get("roles") instanceof Collection<?> values)
-                values.stream().map(Object::toString).map(String::toUpperCase)
-                        .filter(Set.of("ADMIN", "OPERATOR", "USER")::contains).map(r -> "ROLE_" + r)
-                        .forEach(roles::add);
-            return new JwtAuthenticationToken(jwt, roles.stream()
-                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList(),
+            // realm_access.roles
+            extractRoles(jwt.getClaim("realm_access"), roles);
+            // resource_access.<resourceId>.roles
+            Object resourceAccess = jwt.getClaim("resource_access");
+            if (resourceAccess instanceof Map<?, ?> clients
+                    && clients.get(resourceId) instanceof Map<?, ?> clientAccess) {
+                extractRoles(clientAccess, roles);
+            }
+            return new JwtAuthenticationToken(jwt,
+                    roles.stream().map(SimpleGrantedAuthority::new).toList(),
                     jwt.getSubject());
         };
+    }
+
+    private void extractRoles(Object accessClaim, Set<String> target) {
+        if (accessClaim instanceof Map<?, ?> map
+                && map.get("roles") instanceof Collection<?> values) {
+            values.stream()
+                    .map(Object::toString)
+                    .map(String::toUpperCase)
+                    .filter(Set.of("ADMIN", "OPERATOR", "USER", "SERVICE")::contains)
+                    .map(role -> "ROLE_" + role)
+                    .forEach(target::add);
+        }
     }
 }

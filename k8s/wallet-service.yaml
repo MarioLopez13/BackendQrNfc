@@ -1,0 +1,171 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartpayut-wallet
+  namespace: smartpayut-dev
+  labels:
+    app: smartpayut-wallet
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+  selector:
+    matchLabels:
+      app: smartpayut-wallet
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: "50%"
+      maxUnavailable: "50%"
+  template:
+    metadata:
+      labels:
+        app: smartpayut-wallet
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      initContainers:
+        - name: wait-for-db
+          image: busybox
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - >-
+              echo Waiting 10s...; sleep 10;
+              until nc -z zeus-rw.postgres-prod.svc.cluster.local 5432;
+              do echo waiting postgres...; sleep 2; done;
+              echo DB ready
+      containers:
+        - name: smartpayut-wallet
+          image: ghcr.io/mariolopez13/smartpayut-wallet-service-dev:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 9911
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: kubernetes
+            - name: SERVER_PORT
+              value: "9911"
+            # ── Database ──
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://zeus-rw.postgres-prod.svc.cluster.local:5432/smartpayut-dev?currentSchema=wallet
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: POSTGRES_PASSWORD
+            - name: SPRING_READ_DATASOURCE_URL
+              value: jdbc:postgresql://zeus-rw.postgres-prod.svc.cluster.local:5432/smartpayut-dev?currentSchema=wallet
+            - name: SPRING_READ_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: POSTGRES_USER
+            - name: SPRING_READ_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: POSTGRES_PASSWORD
+            # ── Redis ──
+            - name: SPRING_DATA_REDIS_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: REDIS_HOST
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: REDIS_PASSWORD
+            - name: REDIS_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: REDIS_PASSWORD
+            # ── RabbitMQ ──
+            - name: SPRING_RABBITMQ_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: RABBITMQ_HOST
+            - name: SPRING_RABBITMQ_PORT
+              value: "5672"
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: RABBITMQ_USER
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: smartpayut-db-secret
+                  key: RABBITMQ_PASSWORD
+            # ── JWT / Keycloak ──
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: https://sso-dev.kynsoft.work/realms/smartpayut
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
+              value: https://sso-dev.kynsoft.work/realms/smartpayut/protocol/openid-connect/certs
+            # ── HikariCP ──
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              value: "2"
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+              value: "1"
+            # ── App config ──
+            - name: WALLET_LOW_BALANCE_THRESHOLD
+              value: "1.00"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            tcpSocket:
+              port: 9911
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 5
+            timeoutSeconds: 1
+          readinessProbe:
+            tcpSocket:
+              port: 9911
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 10
+            timeoutSeconds: 1
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smartpayut-wallet
+  namespace: smartpayut-dev
+spec:
+  selector:
+    app: smartpayut-wallet
+  ports:
+    - name: http
+      port: 9911
+      targetPort: 9911
+      protocol: TCP
+  type: ClusterIP

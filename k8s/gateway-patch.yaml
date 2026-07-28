@@ -1,0 +1,115 @@
+---
+# Patch for existing smartpayut-gateway deployment.
+# Adds the 4 new service URLs so the gateway can route to them.
+#
+# Apply with:
+#   kubectl set env deployment/smartpayut-gateway -n smartpayut-dev \
+#     WALLET_SERVICE_URL=http://smartpayut-wallet:9911 \
+#     PAYMENT_SERVICE_URL=http://smartpayut-payment:9912 \
+#     TRANSACTION_SERVICE_URL=http://smartpayut-transaction:9913 \
+#     NOTIFICATION_SERVICE_URL=http://smartpayut-notification:9914
+#
+# Or apply this full deployment (preserves existing config + adds new env vars):
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smartpayut-gateway
+  namespace: smartpayut-dev
+  labels:
+    app: smartpayut-gateway
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  progressDeadlineSeconds: 600
+  selector:
+    matchLabels:
+      app: smartpayut-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: "50%"
+      maxUnavailable: "50%"
+  template:
+    metadata:
+      labels:
+        app: smartpayut-gateway
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      initContainers:
+        - name: wait-for-db
+          image: busybox
+          imagePullPolicy: Always
+          command:
+            - sh
+            - -c
+            - >-
+              echo Waiting 10s...; sleep 10;
+              until nc -z zeus-rw.postgres-prod.svc.cluster.local 5432;
+              do echo waiting postgres...; sleep 2; done;
+              echo DB ready
+      containers:
+        - name: smartpayut-gateway
+          image: ghcr.io/mariolopez13/smartpayut-gateway-dev:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: dev
+            # ── Keycloak / JWT ──
+            - name: KEYCLOAK_AUTH_SERVER_URL
+              value: https://sso-dev.kynsoft.work
+            - name: KEYCLOAK_REALM
+              value: smartpayut
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+              value: https://sso-dev.kynsoft.work/realms/smartpayut
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
+              value: https://sso-dev.kynsoft.work/realms/smartpayut/protocol/openid-connect/certs
+            - name: GATEWAY_SECURITY_URL_VALIDATION
+              value: https://sso-dev.kynsoft.work/realms/smartpayut
+            - name: KEYCLOAK_URL
+              value: https://sso-dev.kynsoft.work
+            # ── Downstream services ──
+            - name: IDENTITY_SERVICE_URL
+              value: http://smartpayut-identity:9909
+            - name: WALLET_SERVICE_URL
+              value: http://smartpayut-wallet:9911
+            - name: PAYMENT_SERVICE_URL
+              value: http://smartpayut-payment:9912
+            - name: TRANSACTION_SERVICE_URL
+              value: http://smartpayut-transaction:9913
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://smartpayut-notification:9914
+            # ── HikariCP ──
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              value: "2"
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+              value: "1"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 1
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30

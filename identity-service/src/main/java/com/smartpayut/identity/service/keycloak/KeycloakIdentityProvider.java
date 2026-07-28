@@ -11,11 +11,14 @@ import org.keycloak.representations.idm.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.net.URI;
 import java.util.*;
 
 @Component
 public class KeycloakIdentityProvider implements KeycloakClient {
+    private static final Logger log = LoggerFactory.getLogger(KeycloakIdentityProvider.class);
     private final String serverUrl, realm, clientId, clientSecret, adminClientId, adminClientSecret;
 
     public KeycloakIdentityProvider(@Value("${keycloak.server-url}") String serverUrl,
@@ -79,6 +82,7 @@ public class KeycloakIdentityProvider implements KeycloakClient {
         } catch (IdentityException e) {
             throw e;
         } catch (Exception e) {
+            log.error("Keycloak createUser failed: {}", e.getMessage(), e);
             throw new IdentityException(HttpStatus.BAD_GATEWAY, "No fue posible crear el usuario en Keycloak");
         }
     }
